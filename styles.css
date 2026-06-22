@@ -1,0 +1,236 @@
+/* styles.css — shared dark analytics aesthetic for the simulator prototype */
+
+:root {
+  --bg-0: #08080a;
+  --bg-1: #0d0d11;
+  --bg-2: #14141a;
+  --bg-3: #1b1b22;
+  --bg-4: #232330;
+  --bg-hover: #20202a;
+
+  --border-1: #1d1d26;
+  --border-2: #2a2a34;
+  --border-3: #3a3a48;
+
+  --text-0: #f1f1f6;
+  --text-1: #cdcdd7;
+  --text-2: #9b9ba8;
+  --text-3: #7c7c8a;
+  --text-4: #56565f;
+
+  --teal:   #5eead4;
+  --amber:  #fbbf24;
+  --gold:   #f59e0b;
+  --red:    #f87171;
+  --blue:   #60a5fa;
+  --green:  #4ade80;
+  --violet: #a78bfa;
+
+  --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'JetBrains Mono', 'SF Mono', monospace;
+
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-md: 12px;
+  --fs-lg: 13px;
+  --fs-xl: 15px;
+  --fs-2xl: 20px;
+  --fs-3xl: 28px;
+  --fs-4xl: 40px;
+}
+
+.sim {
+  font-family: var(--sans);
+  font-size: var(--fs-md);
+  color: var(--text-1);
+  background: var(--bg-0);
+  width: 100%; height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01', 'cv11';
+}
+.sim *, .sim *::before, .sim *::after { box-sizing: border-box; }
+
+/* chrome bar — every artboard gets one */
+.sim-chrome {
+  height: 32px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border-1);
+  display: flex; align-items: center;
+  padding: 0 10px;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.sim-chrome .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+.sim-chrome .crumb { color: var(--text-2); }
+.sim-chrome .crumb .sep { margin: 0 6px; color: var(--text-4); }
+.sim-chrome .crumb b { color: var(--text-0); font-weight: 500; }
+.sim-chrome .spacer { flex: 1; }
+.sim-chrome .pill { padding: 2px 8px; border: 1px solid var(--border-2); border-radius: 4px; color: var(--text-2); }
+.sim-chrome .pill.ok { color: var(--green); border-color: color-mix(in oklab, var(--green) 30%, transparent); }
+
+/* numeric primitive */
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* common form controls */
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label, .label-cap {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.input, .select {
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  color: var(--text-0);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  padding: 5px 8px;
+  border-radius: 3px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  transition: border-color .12s, background .12s;
+}
+.input:focus, .select:focus { border-color: var(--teal); background: var(--bg-3); }
+.select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  padding-right: 22px;
+}
+
+.input-row { display: flex; align-items: center; gap: 0; border: 1px solid var(--border-2); border-radius: 3px; background: var(--bg-2); }
+.input-row .input { border: 0; background: transparent; padding-right: 4px; text-align: right; }
+.input-row .suffix { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-3); padding-right: 8px; }
+
+.btn {
+  border: 1px solid var(--border-2);
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all .12s;
+}
+.btn:hover { background: var(--bg-3); border-color: var(--border-3); color: var(--text-0); }
+.btn.primary { background: color-mix(in oklab, var(--teal) 14%, var(--bg-2)); border-color: color-mix(in oklab, var(--teal) 40%, var(--border-2)); color: var(--teal); }
+.btn.primary:hover { background: color-mix(in oklab, var(--teal) 22%, var(--bg-2)); }
+
+/* segmented */
+.seg { display: flex; border: 1px solid var(--border-2); border-radius: 3px; overflow: hidden; }
+.seg button {
+  flex: 1;
+  background: var(--bg-2);
+  border: 0;
+  border-right: 1px solid var(--border-2);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 5px 6px;
+  cursor: pointer;
+  transition: all .1s;
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { color: var(--text-0); background: var(--bg-3); }
+.seg button.active { background: color-mix(in oklab, var(--teal) 18%, var(--bg-2)); color: var(--teal); }
+
+/* tables */
+table.dense { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-sm); }
+table.dense th {
+  text-align: left;
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-2);
+  background: var(--bg-1);
+  position: sticky; top: 0; z-index: 1;
+}
+table.dense td { padding: 5px 8px; border-bottom: 1px solid var(--border-1); color: var(--text-1); }
+table.dense tr:hover td { background: var(--bg-2); }
+table.dense .num { color: var(--text-0); }
+table.dense .right { text-align: right; }
+table.dense .dim { color: var(--text-3); }
+
+/* metric tiles */
+.metric {
+  background: var(--bg-1);
+  border: 1px solid var(--border-1);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.metric .k { font-family: var(--mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
+.metric .v { font-family: var(--mono); font-size: var(--fs-2xl); color: var(--text-0); font-variant-numeric: tabular-nums; line-height: 1; }
+.metric .sub { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-3); }
+.metric.big .v { font-size: var(--fs-3xl); }
+.metric.huge .v { font-size: var(--fs-4xl); letter-spacing: -0.02em; }
+.metric.teal  .v { color: var(--teal); }
+.metric.amber .v { color: var(--amber); }
+.metric.gold  .v { color: var(--gold); }
+.metric.red   .v { color: var(--red); }
+.metric.green .v { color: var(--green); }
+.metric.blue  .v { color: var(--blue); }
+
+/* mini bar visualisations */
+.barwrap { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.barwrap > div { height: 100%; background: var(--teal); }
+.barwrap.amber > div { background: var(--amber); }
+.barwrap.red > div { background: var(--red); }
+.barwrap.gold > div { background: var(--gold); }
+.barwrap.blue > div { background: var(--blue); }
+
+/* section header inside an artboard */
+.h-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-1);
+  background: var(--bg-1);
+  flex-shrink: 0;
+}
+.h-strip .title { font-family: var(--mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-2); }
+.h-strip .meta { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-3); }
+
+/* terminal-mode specifics */
+.term { background: #050507; color: #d8d8e0; font-family: var(--mono); font-size: 12px; }
+.term .prompt { color: var(--teal); }
+.term .var { color: var(--amber); }
+.term .num-out { color: var(--green); }
+.term .com { color: var(--text-3); }
+.term .err { color: var(--red); }
+.term .key { color: var(--blue); }
+
+/* scrollbars (webkit) */
+.scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--border-3) transparent; }
+.scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--border-3); border-radius: 4px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* force-visible scrollbar — beats the design-canvas .dc-card * hide rule */
+.scroll-vis { scrollbar-width: thin !important; scrollbar-color: var(--border-3) var(--bg-1); }
+.scroll-vis::-webkit-scrollbar { display: block !important; width: 10px; height: 10px; }
+.scroll-vis::-webkit-scrollbar-thumb { background: var(--border-3); border-radius: 5px; border: 2px solid var(--bg-1); }
+.scroll-vis::-webkit-scrollbar-track { background: var(--bg-1); }
+
+/* generic divider */
+.hr { height: 1px; background: var(--border-1); }
