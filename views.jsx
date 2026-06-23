@@ -1054,7 +1054,7 @@ function StatsPane({input, result}){
 
 function ComparePane({input, set}){
   const LS_IRREL = 'sim_irrelevant_v1';
-  const DEFAULT_IRREL = ['_bandit_camp_leader', 'bandit_camp_leader'];
+  const DEFAULT_IRREL = ['_bandit_camp_leader', 'bandit_camp_leader', 'magicaxe'];
   const [irrelevant, setIrrelevant] = useState(() => {
     try {
       const stored = localStorage.getItem(LS_IRREL);
@@ -2630,7 +2630,7 @@ function CombatWorkbench(){
 
   return (
     <div className="sim" style={{display:'flex', flexDirection:'column'}}>
-      <Chrome crumbs={['workspace','sim','combat.workbench']}
+      <Chrome crumbs={['Index Combat Simulator']}
               extras={[input.combatType.toUpperCase()]} />
 
       <div style={{display:'grid', gridTemplateColumns:'280px minmax(0, 1fr) 320px', flex:1, minHeight:0}}>
