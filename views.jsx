@@ -639,6 +639,12 @@ function EquipmentPane({type, input, set}){
     // Equipping the ring of wealth auto-enables its gem-table effect (and
     // removing it disables it) so the loot EV matches what's worn.
     if (slotKey === 'ring') set('ringOfWealth', itemKey === 'ring_of_wealth');
+    // Chaos gauntlets give +3 bolt max hit (magic only) — auto-toggle the
+    // matching boost so it tracks what's actually worn in the gloves slot.
+    if (slotKey === 'gloves' && ct === 'magic'){
+      const cur = (input.boosts || []).filter(b => b !== 'chaos_gauntlets');
+      set('boosts', itemKey === 'chaos_gauntlets' ? [...cur, 'chaos_gauntlets'] : cur);
+    }
   };
 
   // ---- Best in slot ----------------------------------------------------
@@ -766,7 +772,7 @@ function EquipmentPane({type, input, set}){
           {(ct==='melee' || ct==='ranged') && (() => {
             // Special-attack weapon: a 2nd weapon brought only to spec on cooldown.
             const specOpts = ct==='melee'
-              ? [['none','None'],['dragon_dagger','Dragon dagger (DDS)'],['dragon_longsword','Dragon longsword'],['dragon_halberd','Dragon halberd']]
+              ? [['none','None'],['dragon_dagger','Dragon dagger (DDS)'],['dragon_longsword','Dragon longsword'],['dragon_mace','Dragon mace'],['dragon_halberd','Dragon halberd']]
               : [['none','None'],['magic_shortbow','Magic shortbow']];
             const dbaOn = ct==='melee' && (input.boosts||[]).includes('dba_spec');
             const cur0 = input.specWeapon || 'none';
@@ -853,11 +859,21 @@ function EquipmentPane({type, input, set}){
           </div>
           <div style={{display:'grid', gap:8}}>
             {ARMOUR_SLOTS.map(slot => {
-              const cur = gear[slot.key] || 'none';
+              // A two-handed weapon (bows, dragon halberd) occupies the off-hand,
+              // so the shield slot is locked to None while one is equipped.
+              const twoHand = !!(E?.WEAPONS[input.weapon]?.twoHand);
+              const offHandLocked = slot.key==='shield' && twoHand;
+              const cur = offHandLocked ? 'none' : (gear[slot.key] || 'none');
               const items = slot.items;
               return (
                 <div key={slot.key} style={{display:'grid', gridTemplateColumns:'58px 1fr', alignItems:'center', gap:8}}>
                   <span className="label-cap" style={{textAlign:'right'}}>{slot.label}</span>
+                  {offHandLocked ? (
+                    <div className="select" style={{opacity:.5, display:'flex', alignItems:'center', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-3)'}}
+                      title="Two-handed weapon equipped — the off-hand slot is unavailable.">
+                      — 2h weapon (no off-hand)
+                    </div>
+                  ) : (
                   <select className="select" value={cur} onChange={e=>setSlot(slot.key, e.target.value)}>
                     {Object.entries(items).map(([k,v])=> {
                       const bits = [];
@@ -870,6 +886,7 @@ function EquipmentPane({type, input, set}){
                       return <option key={k} value={k}>{v.name}{sfx}{v.approx&&k!=='none'?' ~':''}</option>;
                     })}
                   </select>
+                  )}
                 </div>
               );
             })}

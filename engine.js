@@ -89,17 +89,17 @@
     // poison. poison_severity=20 (daggers.obj @ rev274); alch = floor(24000×0.6).
     dragon_dagger_p:  { name:'Dragon dagger(p)',  type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:14400, stab:true, poisonSeverity:20 },
     dragon_longsword: { name:'Dragon longsword',  type:'melee', wclass:'longsword', accBonus:69, dmgBonus:71, speed:5, alch:60000 },
-    dragon_halberd:   { name:'Dragon halberd',    type:'melee', wclass:'halberd',  accBonus:95, dmgBonus:89, speed:7, alch:150000 },
+    dragon_halberd:   { name:'Dragon halberd',    type:'melee', wclass:'halberd',  accBonus:95, dmgBonus:89, speed:7, alch:150000, twoHand:true },
     // Dragon mace — the only CRUSH melee weapon here (maces.obj @rev274:
     // crushattack 60, strengthbonus 55, attackrate 5). Has a spec (sa_energy
     // 250 = 25%, "Punish": ×1.5 dmg ×1.25 acc vs crush). alch = floor(50000×0.6).
     dragon_mace:      { name:'Dragon mace',       type:'melee', wclass:'mace',     accBonus:60, dmgBonus:55, speed:5, alch:30000 },
     // ranged — bows (shortbow rate 4, longbow rate 6). dmgBonus=0; ammo adds str.
-    maple_shortbow:   { name:'Maple shortbow',    type:'ranged', sub:'bow', accBonus:29, dmgBonus:0,  speed:4, alch:240 },
-    yew_shortbow:     { name:'Yew shortbow',      type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:4, alch:480 },
-    magic_shortbow:   { name:'Magic shortbow',    type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:4, alch:960 },
-    yew_longbow:      { name:'Yew longbow',       type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:6, alch:768 },
-    magic_longbow:    { name:'Magic longbow',     type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:6, alch:1536 },
+    maple_shortbow:   { name:'Maple shortbow',    type:'ranged', sub:'bow', accBonus:29, dmgBonus:0,  speed:4, alch:240, twoHand:true },
+    yew_shortbow:     { name:'Yew shortbow',      type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:4, alch:480, twoHand:true },
+    magic_shortbow:   { name:'Magic shortbow',    type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:4, alch:960, twoHand:true },
+    yew_longbow:      { name:'Yew longbow',       type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:6, alch:768, twoHand:true },
+    magic_longbow:    { name:'Magic longbow',     type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:6, alch:1536, twoHand:true },
     // thrown weapons (knives & darts, attackrate 3) — mainhand slot, so they
     // CAN'T be used with a bow. accBonus/dmgBonus 0; the item is its own ammo
     // (ammoKey → the matching ARROWS entry that carries its ranged strength).
@@ -1155,7 +1155,7 @@
   // busy random table trends toward 4s. A few monsters are notably spread out
   // (you roam between spawns) — forced to 4s here. Always editable per monster.
   const OVERHEAD_OVERRIDE = {
-    blue_dragon: 4, green_dragon: 4,
+    blue_dragon: 4, green_dragon: 4, red_dragon: 4,
     // AFK / near-bones-only spots: almost no loot to grab, so overhead is tiny.
     pirate: 0.5, magicaxe: 0.5, ghoul: 0.5,
     // AFK-friendly, dense spawns — minimal walking/looting between kills.

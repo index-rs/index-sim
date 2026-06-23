@@ -31,7 +31,7 @@ const P = {
   // food
   tuna:60, lobster:185, bass:520, swordfish:220, shark:740, jug_wine:1, beer:2,
   // hides
-  dragonhide_green:1550, dragonhide_blue:2200, dragonhide_black:3300,
+  dragonhide_green:1550, dragonhide_blue:2200, dragonhide_red:2700, dragonhide_black:3300,
   // green d'hide armour (elf warrior drops) — valued at high-alch (rarely traded)
   dragonhide_body:4680, dragonhide_chaps:2340,
   fur:30, raw_bear_meat:10, raw_rat_meat:5,
@@ -88,6 +88,7 @@ Object.assign(P, {
   "big_bones":390,"bloodrune":775,"bodyrune":14,"bronze_arrow":15,"chaosrune":133,"coal":530,
   "cosmicrune":245,"cow_hide":510,"deathrune":218,"dragon_bones":2504,"dragon_longsword":126000,
   "dragon_spear":402000,"dragonhide_black":3640,"dragonhide_blue":2960,"dragonhide_green":2700,
+  "dragonhide_red":3200,
   "dragonstone":181400,"earthrune":11,"eye_of_newt":245,"feather":18,"fire_battlestaff":13800,
   "firerune":14,"gold_bar":390,"gold_ore":1100,"guam_leaf":350,"herb_avantoe":5180,
   "herb_cadantine":3440,"herb_dwarf_weed":9300,"herb_guam":350,"herb_harralander":2080,
@@ -1195,6 +1196,28 @@ const MONSTERS = [
       gemDrop(w(5)),
     ] },
 
+  // Red dragon — EXACT from all.npc @rev225 (red_dragon): vislvl 152, hp 140,
+  // att/str/def 130; def bonuses stab50/slash70/crush70/range50/magic60; slash
+  // attack style + dragonfire. death_drop=dragon_bones, plus a guaranteed red
+  // dragonhide. Drop table from drop tables/scripts/red_dragon.rs2 @274 — note it
+  // rolls a HARD clue tertiary (~trail_hardcluedrop, 1/128). Sits between the blue
+  // (lvl 111) and black (lvl 227) dragons.
+  { id:'red_dragon', name:'Red Dragon', level:152, hp:140, attack:130, strength:130, defLevel:130, dragonfire:true,
+    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
+    loot:[
+      always('Dragon bones',1,'dragon_bones'), always('Red dragonhide',1,'dragonhide_red'),
+      d('Mithril 2h sword',4,1,'mithril_2h_sword'), d('Mithril axe',3,1,'mithril_axe'),
+      d('Mithril battleaxe',3,1,'mithril_battleaxe'), d('Rune dart ×8',3,8,'rune_dart'),
+      d('Mithril javelin ×20',1,20,'mithril_javelin'), d('Mithril kiteshield',1,1,'mithril_kiteshield'),
+      d('Adamant platebody',1,1,'adamant_platebody'), d('Rune longsword',1,1,'rune_longsword'),
+      d('Rune arrow ×4',8,4,'rune_arrow'), d('Law rune ×4',5,4,'lawrune'),
+      d('Blood rune ×2',4,2,'bloodrune'), d('Death rune ×5',3,5,'deathrune'),
+      herbDrop(w(2)),
+      coins(40,196), coins(29,66), coins(10,330), coins(1,690),
+      d('Chocolate cake ×3',3,3,'chocolate_cake'), d('Adamantite bar',1,1,'adamantite_bar'),
+      gemDrop(w(5)),
+    ] },
+
   { id:'black_dragon', name:'Black Dragon', level:227, hp:190, attack:200, strength:200, defLevel:200, dragonfire:true,
     defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
     loot:[
@@ -1293,6 +1316,7 @@ const MONSTER_CLUES = {
   greater_demon: ['hard'],
   green_dragon:  ['hard'],
   blue_dragon:   ['hard'],
+  red_dragon:    ['hard'],   // ~trail_hardcluedrop in red_dragon.rs2
   black_dragon:  ['hard'],
   elf_warrior_90:  ['hard'],   // ~trail_hardcluedrop in regicide_darkelf.rs2
   elf_warrior_108: ['hard'],   // shares the elf_warrior table
