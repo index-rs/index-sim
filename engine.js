@@ -753,15 +753,20 @@
     // your stats, so only the HP killed by real hits counts. Spell base xp (per
     // cast) is unaffected and added on top.
     let combatXpPerKill = combatXpRate * m.hp * directFrac;
-    // Magic: base spell XP per successful cast, ON TOP of damage XP.
-    // Successful casts to kill ≈ HP / avg-damage-per-hit (= 2·HP / maxHit).
+    // Magic: base spell XP per cast, ON TOP of damage XP. In 2004scape
+    // give_spell_xp runs in pvm_spell_cast — BEFORE the hit roll — so the spell's
+    // base xp is awarded on EVERY cast, including splashes (verified @274). The
+    // 2×damage component still counts hits only. So:
+    //   landing casts = HP / avg-damage-per-hit (= 2·HP / maxHit)
+    //   total casts   = landing casts / hitChance   (splashes give base xp too)
     let spellXpPerKill = 0;
     if (input.combatType === 'magic' && input.spellBase){
       const spell = SPELLS[input.spell];
       const baseXp = spell?.baseXp || 0;
       const avgDmgPerHit = Math.max(1, mh / 2);
-      const castsToKill = m.hp / avgDmgPerHit;
-      spellXpPerKill = baseXp * castsToKill;
+      const landingCasts = m.hp / avgDmgPerHit;
+      const totalCasts = landingCasts / Math.max(0.01, hc);
+      spellXpPerKill = baseXp * totalCasts;
       combatXpPerKill += spellXpPerKill;
     }
     const hpXpPerKill     = hpXpRate * m.hp * directFrac;

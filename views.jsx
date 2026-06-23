@@ -1054,7 +1054,7 @@ function StatsPane({input, result}){
 
 function ComparePane({input, set}){
   const LS_IRREL = 'sim_irrelevant_v1';
-  const DEFAULT_IRREL = ['_bandit_camp_leader', 'bandit_camp_leader', 'magicaxe'];
+  const DEFAULT_IRREL = ['_bandit_camp_leader', 'bandit_camp_leader'];
   const [irrelevant, setIrrelevant] = useState(() => {
     try {
       const stored = localStorage.getItem(LS_IRREL);
