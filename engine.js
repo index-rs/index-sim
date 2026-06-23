@@ -1149,7 +1149,16 @@
   // mob is ~2s; a monster with a guaranteed pickup (e.g. a dragon's hide) plus a
   // busy random table trends toward 4s. A few monsters are notably spread out
   // (you roam between spawns) — forced to 4s here. Always editable per monster.
-  const OVERHEAD_OVERRIDE = { blue_dragon: 4, green_dragon: 4 };
+  const OVERHEAD_OVERRIDE = {
+    blue_dragon: 4, green_dragon: 4,
+    // AFK / near-bones-only spots: almost no loot to grab, so overhead is tiny.
+    pirate: 0.5, magicaxe: 0.5, ghoul: 0.5,
+    // AFK-friendly, dense spawns — minimal walking/looting between kills.
+    earth_warrior: 1, ice_warrior: 1, rock_crab: 1,
+    // Spread-out / loot to grab / roam between spawns.
+    hellhound: 4, thug: 2, chaos_druid: 2,
+    elf_warrior_90: 3.5, elf_warrior_108: 3.5,
+  };
   function defaultOverhead(m){
     if (!m) return 3;
     if (OVERHEAD_OVERRIDE[m.id] != null) return OVERHEAD_OVERRIDE[m.id];

@@ -32,6 +32,8 @@ const P = {
   tuna:60, lobster:185, bass:520, swordfish:220, shark:740, jug_wine:1, beer:2,
   // hides
   dragonhide_green:1550, dragonhide_blue:2200, dragonhide_black:3300,
+  // green d'hide armour (elf warrior drops) — valued at high-alch (rarely traded)
+  dragonhide_body:4680, dragonhide_chaps:2340,
   fur:30, raw_bear_meat:10, raw_rat_meat:5,
   // ores/bars
   tin_ore:4, copper_ore:4, iron_ore:90, gold_ore:135, mithril_ore:220, adamantite_ore:1100,
@@ -158,6 +160,8 @@ const ALCH = {
   mithril_sq_shield:1170, mithril_kiteshield:1560, mithril_chainbody:2400,
   mithril_sword:780, mithril_mace:630, mithril_axe:576, mithril_2h_sword:1560,
   mithril_battleaxe:1248, mithril_spear:1200,
+  // green d'hide armour (high_alch = floor(cost*0.6); body cost 7800, chaps 3900)
+  dragonhide_body:4680, dragonhide_chaps:2340,
   // steel
   steel_full_helm:240, steel_med_helm:120, steel_kiteshield:168, steel_platelegs:480,
   steel_battleaxe:240, steel_longsword:192, steel_scimitar:120,
@@ -406,6 +410,33 @@ function DAGANNOTH_LOOT(){
     d('Opal bolt tips ×12',2,12,'opal_bolttips'),
     casketDrop(1/128),
     gemDrop(1/128),
+  ];
+}
+
+// Elf warrior shared drop table — verbatim from
+// quest_regicide/scripts/regicide_darkelf.rs2 ([ai_queue3,_elf_warrior],
+// random(128)) @274. Both the lvl-90 (crystal bow) and lvl-108 (crystal halberd)
+// Tirannwn elf warriors share this single table (category=elf_warrior).
+// death_drop = bones (guaranteed). Tertiary: hard clue scroll (~trail_hardcluedrop).
+function ELF_WARRIOR_LOOT(){
+  return [
+    always('Bones',1,'bones'),
+    d('Green d\'hide body',4,1,'dragonhide_body'),
+    d('Green d\'hide chaps',3,1,'dragonhide_chaps'),
+    d('Mithril spear',2,1,'mithril_spear'),
+    d('Mithril kiteshield',1,1,'mithril_kiteshield'),
+    d('Adamant full helm',1,1,'adamant_full_helm'),
+    d('Rune dagger',1,1,'rune_dagger'),
+    d('Water rune ×70',8,70,'waterrune'),
+    d('Nature rune ×12',5,12,'naturerune'),
+    d('Law rune ×2',3,2,'lawrune'),
+    d('Fire rune ×37',3,37,'firerune'),
+    herbDrop(w(15)),
+    coins(29,44), coins(10,180), coins(5,20),
+    d('Bass',3,1,'bass'),
+    d('Shark',3,1,'shark'),
+    d('Adamantite ore',1,1,'adamantite_ore'),
+    gemDrop(w(5)),
   ];
 }
 
@@ -1180,6 +1211,40 @@ const MONSTERS = [
       ultrarareDrop(w(2)),
     ] },
 
+  // Ghoul — area_mortmyre/configs/mortmyre.npc [ghoul] @274: lvl 42, hp 50,
+  // att 30 / str 40 / def 30, crush_style, NO def bonuses, NO att/str bonuses.
+  // No drop table & no config death_drop beyond bones — drops ONLY bones (100%).
+  // Popular low-supply melee/ranged leveling spot, so left visible (not "pass").
+  { id:'ghoul', name:'Ghoul', level:42, hp:50, attack:30, strength:40, defLevel:30,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+    loot:[
+      always('Bones',1,'bones'),
+    ] },
+
+  // Magic axe — _unpack/225/all.npc [magicaxe] @274: lvl 42, hp 44, att/str 38,
+  // def 29; def bonuses stab10/slash5/crush15/range10/magic5; slash_style.
+  // NO weighted drop table exists in content — the NPC's only drop is the config
+  // death_drop=iron_battleaxe (guaranteed), and it drops NO bones (animated axe).
+  { id:'magicaxe', name:'Magic axe', level:42, hp:44, attack:38, strength:38, defLevel:29,
+    defStab:10, defSlash:5, defCrush:15, defRange:10, defMagic:5, attackSpeed:4,
+    loot:[
+      always('Iron battleaxe',1,'iron_battleaxe'),
+    ] },
+
+  // Elf warrior (lvl 90) — regicide_darkelf @274: ranged (crystal bow). hp 105,
+  // att 10 / str 80 / def 10 / ranged 80. Def bonuses stab/slash/crush/magic 50,
+  // range 70. Shares the elf_warrior drop table; drops a HARD clue.
+  { id:'elf_warrior_90', name:'Elf warrior (90)', level:90, hp:105, attack:10, strength:80, defLevel:10, ranged:80,
+    defStab:50, defSlash:50, defCrush:50, defRange:70, defMagic:50, attackSpeed:4,
+    loot: ELF_WARRIOR_LOOT() },
+
+  // Elf warrior (lvl 108) — regicide_darkelf2 @274: melee (crystal halberd). hp 105,
+  // att 95 / str 95 / def 80. Def bonuses stab 50, slash/crush 70, magic 60, range 50.
+  // Shares the elf_warrior drop table; drops a HARD clue.
+  { id:'elf_warrior_108', name:'Elf warrior (108)', level:108, hp:105, attack:95, strength:95, defLevel:80,
+    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
+    loot: ELF_WARRIOR_LOOT() },
+
 ];
 
 // =====================================================================
@@ -1229,6 +1294,8 @@ const MONSTER_CLUES = {
   green_dragon:  ['hard'],
   blue_dragon:   ['hard'],
   black_dragon:  ['hard'],
+  elf_warrior_90:  ['hard'],   // ~trail_hardcluedrop in regicide_darkelf.rs2
+  elf_warrior_108: ['hard'],   // shares the elf_warrior table
 };
 for (const m of MONSTERS) {
   const c = MONSTER_CLUES[m.id];
