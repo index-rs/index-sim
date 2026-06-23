@@ -27,7 +27,7 @@
   // distance, teleports and obstacles. Per-monster so the Compare table and
   // each trip reflect the real travel cost. Override per-run in the Trip panel.
   const BANK_PRESETS = {
-    green_dragon:240, blue_dragon:270, black_dragon:300,
+    green_dragon:240, blue_dragon:270, red_dragon:300, black_dragon:300,
     ice_warrior:150, firegiant:210, giant:90, mossgiant:110, icegiant:120,
     hellhound:150, greater_demon:130, lesser_demon:120, black_demon:160,
     hobgoblin_armed:120, hobgoblin_unarmed:120, bandit:90, ankou:140,

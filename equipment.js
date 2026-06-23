@@ -158,12 +158,16 @@
       if (!item) return;
       for (const k of BONUS_KEYS) if (item[k]) totals[k] += item[k];
     };
+    // A two-handed weapon (bows, dragon halberd) occupies the off-hand, so the
+    // shield slot contributes nothing while one is equipped.
+    const E = window.SimEngine;
+    const twoHand = !!(loadout.weapon && E?.WEAPONS[loadout.weapon]?.twoHand);
     for (const def of SLOT_DEFS){
+      if (def.key === 'shield' && twoHand) continue;
       const sel = loadout[def.key];
       if (sel && sel !== 'none') add(def.items[sel]);
     }
     // weapon
-    const E = window.SimEngine;
     let thrownAmmo = null;
     if (loadout.weapon && loadout.weapon !== 'none' && E?.WEAPONS[loadout.weapon]){
       const w = E.WEAPONS[loadout.weapon];
