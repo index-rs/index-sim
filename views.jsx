@@ -131,6 +131,136 @@ function LootSearchInput({ value, onChange, placeholder, style, useSelectClass=t
 }
 
 // ---------- presets per combat type ------------------------------------
+
+// Gear tiers for the Settings → declutter toggles. tierOf() maps an item KEY
+// (weapon, ammo or armour) to a tier tag; hiding a tier drops its items from
+// every picker (the currently-equipped item is always kept so you never lose a
+// selection). Dragonhide is matched before metal so 'black d-hide' ≠ black metal.
+const GEAR_TIER_DEFS = [
+  { key:'bronze',      label:'Bronze' },
+  { key:'iron',        label:'Iron' },
+  { key:'steel',       label:'Steel' },
+  { key:'black',       label:'Black' },
+  { key:'mithril',     label:'Mithril' },
+  { key:'adamant',     label:'Adamant' },
+  { key:'green_dhide', label:'Green d-hide' },
+  { key:'blue_dhide',  label:'Blue d-hide' },
+  { key:'red_dhide',   label:'Red d-hide' },
+  { key:'leather',     label:'Leather' },
+  { key:'mage_1def',   label:'1 defence magic' },
+];
+// Explicit membership for tiers that aren't a simple key prefix.
+const MAGE_1DEF_KEYS = new Set(['green_hat', 'zamorak_robe_bottom', 'wizard_robe_top']);
+const LEATHER_KEYS = new Set(['coif', 'leather_body', 'hardleather_body', 'studded_body',
+  'leather_chaps', 'studded_chaps', 'leather_vambraces']);
+function tierOf(key){
+  if (!key) return null;
+  const k = key.toLowerCase();
+  if (LEATHER_KEYS.has(k)) return 'leather';
+  if (MAGE_1DEF_KEYS.has(k)) return 'mage_1def';
+  if (/dhide|d-hide|vamb/.test(k)){
+    if (k.startsWith('green')) return 'green_dhide';
+    if (k.startsWith('blue'))  return 'blue_dhide';
+    if (k.startsWith('red'))   return 'red_dhide';
+    if (k.startsWith('black')) return 'black_dhide';
+    return null;                       // leather vambraces etc — always shown
+  }
+  if (k.startsWith('bronze')) return 'bronze';
+  if (k.startsWith('iron'))   return 'iron';
+  if (k.startsWith('steel'))  return 'steel';
+  if (k.startsWith('black'))  return 'black';
+  if (k.startsWith('mithril') || k.startsWith('mith_')) return 'mithril';
+  if (k.startsWith('adamant') || k.startsWith('addy'))  return 'adamant';
+  return null;
+}
+function tierHidden(key, hiddenTiers){
+  const t = tierOf(key);
+  return !!(t && hiddenTiers && hiddenTiers[t]);
+}
+
+// Generic searchable combobox. Behaves like a <select> when idle (shows the
+// chosen option's label), but on focus turns into a type-to-filter search — far
+// nicer than a giant native dropdown once a slot has many options. Mirrors the
+// LootSearchInput interaction (focus opens, mousedown picks, blur closes).
+// options: [{ key, label, hint?, color? }].
+function SearchSelect({ options, value, onChange, disabled, placeholder='Type to search…' }){
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const cur = options.find(o => o.key === value);
+  const curLabel = cur ? cur.label : (value || 'None');
+  const q = query.trim().toLowerCase();
+  const filtered = options.filter(o =>
+    !q || o.label.toLowerCase().includes(q) || o.key.toLowerCase().includes(q));
+
+  return (
+    <div style={{position:'relative'}}>
+      <input
+        type="text"
+        className="select"
+        value={open ? query : curLabel}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={e=>{ setQuery(e.target.value); setOpen(true); }}
+        onFocus={e=>{ setOpen(true); setQuery(''); e.target.select(); }}
+        onBlur={()=>setTimeout(()=>{ setOpen(false); setQuery(''); }, 160)}
+        style={{width:'100%', boxSizing:'border-box', cursor: open?'text':'pointer',
+          opacity: disabled?0.5:1}}
+      />
+      {open && (
+        <div className="scroll-vis" style={{position:'absolute', top:'100%', left:0, right:0, zIndex:60,
+          background:'var(--bg-1)', border:'1px solid var(--border-2)', borderRadius:3,
+          marginTop:2, maxHeight:230, overflowY:'auto', boxShadow:'0 8px 22px rgba(0,0,0,.45)'}}>
+          {filtered.length === 0 && (
+            <div style={{padding:'6px 9px', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-3)'}}>no match</div>
+          )}
+          {filtered.map(o => {
+            const active = o.key === value;
+            return (
+              <button key={o.key} type="button"
+                onMouseDown={e=>{ e.preventDefault(); onChange(o.key); setOpen(false); setQuery(''); }}
+                style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:10, width:'100%',
+                  textAlign:'left', padding:'5px 9px', fontFamily:'var(--mono)', fontSize:11, cursor:'pointer',
+                  border:'none', borderBottom:'1px solid var(--border-1)',
+                  background: active ? 'color-mix(in oklab, var(--teal) 16%, transparent)' : 'transparent',
+                  color: active ? 'var(--teal)' : (o.color || 'var(--text-1)')}}
+                onMouseEnter={e=>{ if(!active) e.currentTarget.style.background='var(--bg-2)'; }}
+                onMouseLeave={e=>{ if(!active) e.currentTarget.style.background='transparent'; }}>
+                <span>{o.label}</span>
+                {o.hint && <span style={{fontSize:10, color:'var(--text-3)', whiteSpace:'nowrap'}}>{o.hint}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Armour-slot picker — builds tier-filtered options (name + bonus hint) and
+// renders them through the shared SearchSelect.
+function GearSlotPicker({ items, value, onChange, ct, disabled, hiddenTiers }){
+  const bonusBits = (v) => {
+    const bits = [];
+    if (v.str) bits.push(`+${v.str} str`);
+    if (v.rngStr && ct==='ranged') bits.push(`+${v.rngStr} rstr`);
+    if (v.slashAtt && ct==='melee') bits.push(`+${v.slashAtt} slash`);
+    if (v.rngAtt && ct==='ranged') bits.push(`+${v.rngAtt} rng`);
+    if (v.magAtt && ct==='magic') bits.push(`+${v.magAtt} mag`);
+    if (v.magDmg && ct==='magic') bits.push(`+${v.magDmg}% mdmg`);
+    if (v.prayer) bits.push(`+${v.prayer} pray`);
+    return bits.join(' · ');
+  };
+  const options = Object.entries(items)
+    .filter(([k]) => k==='none' || k===value || !tierHidden(k, hiddenTiers))
+    .map(([k, v]) => ({
+      key: k,
+      label: (v.name || k) + (v.approx && k!=='none' ? ' ~' : ''),
+      hint: k!=='none' ? bonusBits(v) : '',
+    }));
+  return <SearchSelect options={options} value={value} onChange={onChange}
+    disabled={disabled} placeholder="Type to search gear…" />;
+}
+
 function makeDefaults(combatType = 'melee', monsterId){
   const monster = E.MONSTERS.find(m => m.id === (monsterId || 'hill_giant')) || E.MONSTERS[0];
   const base = {
@@ -171,7 +301,7 @@ function makeDefaults(combatType = 'melee', monsterId){
     },
   };
   if (combatType === 'melee'){
-    return {...base, style:'aggressive', prayers:['superhuman'], boosts:['super_str'],
+    return {...base, style:'aggressive', prayers:['none'], boosts:['none'],
       accBonus:69, dmgBonus:71, attackSpeed:5, weapon:'dragon_longsword', weaponName:'Dragon longsword'};
   }
   if (combatType === 'ranged'){
@@ -605,7 +735,7 @@ function boostSummary(input){
 // Holds weapon/ammo/spell, amulet, prayers, potions, sustained mode,
 // DBA spec, and Ring of Wealth. Selecting the tab forces combatType.
 // =======================================================================
-function EquipmentPane({type, input, set}){
+function EquipmentPane({type, input, set, hiddenTiers = {}}){
   const ct = type;
   const prayers = useMemo(() => E.availablePrayers(ct), [ct]);
   const potions = useMemo(() => E.availablePotions(ct), [ct]);
@@ -666,18 +796,33 @@ function EquipmentPane({type, input, set}){
         }).ttkSec;
       } catch { return Infinity; }
     };
+    // Strength-bonus key that matters for THIS combat type — used as the
+    // tie-break below.
+    const STR_KEY = ct === 'magic' ? 'magDmg' : ct === 'ranged' ? 'rngStr' : 'str';
+    const strOf = (items, k) => items[k]?.[STR_KEY] || 0;
     let g = { ...gear };
     // Offence is additive across slots, so a single pass finds the optimum; a
     // second pass is cheap insurance against any tie/interaction.
     for (let pass = 0; pass < 2; pass++){
       for (const slot of ARMOUR_SLOTS){
-        let bestKey = g[slot.key] || 'none';
-        let bestTtk = ttkOf(g);
-        for (const itemKey of Object.keys(slot.items)){
-          const t = ttkOf({ ...g, [slot.key]: itemKey });
-          if (t < bestTtk - 1e-6){ bestTtk = t; bestKey = itemKey; }
-        }
-        g = { ...g, [slot.key]: bestKey };
+        // Score every candidate by TTK, then choose: among items within a
+        // small relative tolerance of the best TTK (a DPS wash), prefer the one
+        // carrying the most strength bonus — it scales better with levels and
+        // buffs, so e.g. the berserker helm (+3 str) wins over the warrior helm
+        // (+5 slash accuracy) when they're effectively tied on the target.
+        const cands = Object.keys(slot.items).map(k => ({ k, t: ttkOf({ ...g, [slot.key]: k }) }));
+        const minT = Math.min(...cands.map(c => c.t));
+        const tol = isFinite(minT) ? minT * 0.01 + 1e-6 : Infinity;
+        cands.sort((a, b) => {
+          const aNear = a.t <= minT + tol, bNear = b.t <= minT + tol;
+          if (aNear && bNear){
+            const sd = strOf(slot.items, b.k) - strOf(slot.items, a.k);
+            if (sd) return sd;            // more strength wins the wash
+            return a.t - b.t;             // else the faster kill
+          }
+          return a.t - b.t;               // clear winner by TTK
+        });
+        g = { ...g, [slot.key]: cands[0].k };
       }
     }
     set('gear', g);
@@ -747,19 +892,32 @@ function EquipmentPane({type, input, set}){
                 ))}
               </div>
             )}
-            <select className="select" value={input.weapon || 'custom'} onChange={e=>onWeapon(e.target.value)}>
-              {Object.entries(E.WEAPONS).filter(([,v])=>v.type===ct && (ct!=='ranged' || (v.sub||'bow')===rangedMode)).map(([k,v])=> <option key={k} value={k}>{v.name} · +{v.accBonus}/+{v.dmgBonus} · {v.speed}t</option>)}
-              <option value="custom">Custom…</option>
-            </select>
+            <SearchSelect
+              value={input.weapon || 'custom'}
+              onChange={onWeapon}
+              placeholder="Type to search weapons…"
+              options={[
+                ...Object.entries(E.WEAPONS)
+                  .filter(([k,v])=>v.type===ct && (ct!=='ranged' || (v.sub||'bow')===rangedMode)
+                    && (k===input.weapon || !tierHidden(k, hiddenTiers)))
+                  .map(([k,v])=>({ key:k, label:v.name, hint:`+${v.accBonus}/+${v.dmgBonus} · ${v.speed}t` })),
+                { key:'custom', label:'Custom…' },
+              ]} />
           </div>
 
           {ct==='ranged' && rangedMode==='bow' && (
             <div>
               <div className="label-cap" style={{marginBottom:6}}>Arrows</div>
-              <select className="select" value={input.ammo || 'custom'} onChange={e=>onAmmo(e.target.value)}>
-                {Object.entries(E.ARROWS).filter(([,v])=>v.kind==='arrow').map(([k,v])=> <option key={k} value={k}>{v.name} · +{v.rangeBonus} rng</option>)}
-                <option value="custom">Custom…</option>
-              </select>
+              <SearchSelect
+                value={input.ammo || 'custom'}
+                onChange={onAmmo}
+                placeholder="Type to search arrows…"
+                options={[
+                  ...Object.entries(E.ARROWS)
+                    .filter(([k,v])=>v.kind==='arrow' && (k===input.ammo || !tierHidden(k, hiddenTiers)))
+                    .map(([k,v])=>({ key:k, label:v.name, hint:`+${v.rangeBonus} rng` })),
+                  { key:'custom', label:'Custom…' },
+                ]} />
             </div>
           )}
           {ct==='ranged' && rangedMode==='thrown' && (
@@ -786,10 +944,9 @@ function EquipmentPane({type, input, set}){
             return (
               <div>
                 <div className="label-cap" style={{marginBottom:6}}>Special attack weapon</div>
-                <select className="select" value={cur} onChange={e=>set('specWeapon', e.target.value)} disabled={dbaOn}
-                  style={dbaOn?{opacity:.5}:undefined}>
-                  {specOpts.map(([k,lbl])=> <option key={k} value={k}>{lbl}</option>)}
-                </select>
+                <SearchSelect value={cur} onChange={k=>set('specWeapon', k)} disabled={dbaOn}
+                  placeholder="Type to search…"
+                  options={specOpts.map(([k,lbl])=>({ key:k, label:lbl }))} />
                 {dbaOn && (
                   <div style={{marginTop:6, fontFamily:'var(--mono)', fontSize:10, color:'var(--red)', lineHeight:1.5}}>
                     DBA spec is your strength source — all spec energy goes to that, so no DPS spec weapon.
@@ -811,11 +968,10 @@ function EquipmentPane({type, input, set}){
           {ct==='magic' && (
             <div>
               <div className="label-cap" style={{marginBottom:6}}>Spell</div>
-              <select className="select" value={input.spell} onChange={e=>{
-                const s=E.SPELLS[e.target.value]; set('spell',e.target.value); set('spellBase',s.base);
-              }}>
-                {Object.entries(E.SPELLS).map(([k,v])=> <option key={k} value={k}>{v.label}</option>)}
-              </select>
+              <SearchSelect value={input.spell}
+                placeholder="Type to search spells…"
+                onChange={k=>{ const s=E.SPELLS[k]; set('spell',k); set('spellBase',s.base); }}
+                options={Object.entries(E.SPELLS).map(([k,v])=>({ key:k, label:v.label }))} />
               {(() => {
                 const sp = E.SPELLS[input.spell];
                 const cost = E.spellRuneCost(input.spell, input.weapon);
@@ -874,18 +1030,8 @@ function EquipmentPane({type, input, set}){
                       — 2h weapon (no off-hand)
                     </div>
                   ) : (
-                  <select className="select" value={cur} onChange={e=>setSlot(slot.key, e.target.value)}>
-                    {Object.entries(items).map(([k,v])=> {
-                      const bits = [];
-                      if (v.str) bits.push(`+${v.str} str`);
-                      if (v.slashAtt && ct==='melee') bits.push(`+${v.slashAtt} slash`);
-                      if (v.rngAtt && ct==='ranged') bits.push(`+${v.rngAtt} rng`);
-                      if (v.magAtt && ct==='magic') bits.push(`+${v.magAtt} mag`);
-                      if (v.prayer) bits.push(`+${v.prayer} pray`);
-                      const sfx = bits.length ? ' · '+bits.join(' ') : '';
-                      return <option key={k} value={k}>{v.name}{sfx}{v.approx&&k!=='none'?' ~':''}</option>;
-                    })}
-                  </select>
+                  <GearSlotPicker items={items} value={cur} ct={ct} hiddenTiers={hiddenTiers}
+                    onChange={k=>setSlot(slot.key, k)} />
                   )}
                 </div>
               );
@@ -2210,7 +2356,7 @@ function PriceAgeBadge({ style }){
 // =======================================================================
 // SETTINGS PANE — import prices.json / alch.json from local files
 // =======================================================================
-function SettingsPane({input}){
+function SettingsPane({input, hiddenTiers = {}, setHiddenTiers}){
   const m = input && input.monster;
   // The live market scrape (run_sim.py / direct CORS sync) is a local-dev tool.
   // On a public host (GitHub Pages) it can't reach the server and we don't want
@@ -2341,6 +2487,44 @@ function SettingsPane({input}){
         </div>
       </div>
 
+      {/* Gear-menu declutter — hide low/unwanted tiers from every picker. */}
+      <div className="h-strip"><span className="title">Gear menu · hide tiers</span>
+        <span className="meta">declutter the equipment pickers</span>
+      </div>
+      <div style={{padding:'12px 14px', display:'grid', gap:12}}>
+        <div style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--text-2)', lineHeight:1.6}}>
+          Hidden tiers are removed from every weapon, ammo and armour picker — handy
+          once you've outgrown the low-level gear. Anything you currently have equipped
+          is always kept, even if its tier is hidden.
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8}}>
+          {GEAR_TIER_DEFS.map(t => {
+            const on = !!hiddenTiers[t.key];
+            return (
+              <label key={t.key} style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
+                padding:'7px 11px', borderRadius:3, cursor:'pointer', userSelect:'none',
+                border:'1px solid '+(on?'color-mix(in oklab, var(--amber) 45%, var(--border-2))':'var(--border-2)'),
+                background: on?'color-mix(in oklab, var(--amber) 12%, var(--bg-2))':'var(--bg-2)',
+                fontFamily:'var(--mono)', fontSize:11, color: on?'var(--amber)':'var(--text-1)'}}>
+                <span>Hide {t.label.toLowerCase()} gear</span>
+                <input type="checkbox" checked={on}
+                  onChange={e=>setHiddenTiers && setHiddenTiers({...hiddenTiers, [t.key]: e.target.checked})} />
+              </label>
+            );
+          })}
+        </div>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+          <button className="btn"
+            onClick={()=>setHiddenTiers && setHiddenTiers(Object.fromEntries(GEAR_TIER_DEFS.map(t=>[t.key, true])))}>
+            Hide all listed tiers
+          </button>
+          {Object.values(hiddenTiers).some(Boolean) && (
+            <button className="btn"
+              onClick={()=>setHiddenTiers && setHiddenTiers({})}>↺ Show all tiers</button>
+          )}
+        </div>
+      </div>
+
       {isLocal ? (<>
       <div className="h-strip"><span className="title">Market scrape</span>
         <span className="meta">live sync · last {window._marketLastSync || 'never'}</span>
@@ -2402,6 +2586,7 @@ function SettingsPane({input}){
 // =======================================================================
 const LS_INPUT = 'sim_input_v3';
 const LS_PREFS = 'sim_loot_prefs_v1';
+const LS_HIDDEN_TIERS = 'sim_hidden_tiers_v1';
 
 function loadSavedInput(){
   try {
@@ -2484,6 +2669,15 @@ function CombatWorkbench(){
   const [lootPrefs, setLootPrefs] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_PREFS) || '{}'); } catch { return {}; }
   });
+  // Gear-tier declutter prefs (Settings) — global UI pref, kept OUT of the
+  // per-loadout input so it doesn't churn with setup switching.
+  const [hiddenTiers, setHiddenTiersState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_HIDDEN_TIERS) || '{}'); } catch { return {}; }
+  });
+  const setHiddenTiers = (next) => {
+    setHiddenTiersState(next);
+    try { localStorage.setItem(LS_HIDDEN_TIERS, JSON.stringify(next)); } catch {}
+  };
   const setLootPref = (itemName, pref) => {
     const next = {...lootPrefs, [itemName]: pref};
     setLootPrefs(next);
@@ -2695,14 +2889,14 @@ function CombatWorkbench(){
           </div>
 
           {tab==='stats'        && <StatsPane input={simInput} result={result}/>}
-          {tab==='equip_melee'  && <EquipmentPane type="melee"  input={input} set={set}/>}
-          {tab==='equip_ranged' && <EquipmentPane type="ranged" input={input} set={set}/>}
-          {tab==='equip_magic'  && <EquipmentPane type="magic"  input={input} set={set}/>}
+          {tab==='equip_melee'  && <EquipmentPane type="melee"  input={input} set={set} hiddenTiers={hiddenTiers}/>}
+          {tab==='equip_ranged' && <EquipmentPane type="ranged" input={input} set={set} hiddenTiers={hiddenTiers}/>}
+          {tab==='equip_magic'  && <EquipmentPane type="magic"  input={input} set={set} hiddenTiers={hiddenTiers}/>}
           {tab==='compare'      && <ComparePane input={simInput} set={set}/>}
           {tab==='duel'         && <DuelPane input={simInput} set={set}/>}
           {tab==='loot'         && <LootPane input={simInput} result={result} lootPrefs={lootPrefs} setLootPref={setLootPref} setLootPrefsBulk={setLootPrefsBulk} set={set}/>}
           {tab==='trip'         && <TripPane input={input} result={result} setTrip={setTrip}/>}
-          {tab==='settings'     && <SettingsPane input={simInput}/>}
+          {tab==='settings'     && <SettingsPane input={simInput} hiddenTiers={hiddenTiers} setHiddenTiers={setHiddenTiers}/>}
         </main>
 
         <MonsterCard input={input} set={set} />
