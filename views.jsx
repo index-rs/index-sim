@@ -147,15 +147,21 @@ const GEAR_TIER_DEFS = [
   { key:'blue_dhide',  label:'Blue d-hide' },
   { key:'red_dhide',   label:'Red d-hide' },
   { key:'leather',     label:'Leather' },
+  { key:'low_bows',    label:'Low-level bows', full:'Hide low-level bows (below magic shortbow)' },
   { key:'mage_1def',   label:'1 defence magic' },
 ];
 // Explicit membership for tiers that aren't a simple key prefix.
 const MAGE_1DEF_KEYS = new Set(['green_hat', 'zamorak_robe_bottom', 'wizard_robe_top']);
 const LEATHER_KEYS = new Set(['coif', 'leather_body', 'hardleather_body', 'studded_body',
   'leather_chaps', 'studded_chaps', 'leather_vambraces']);
+// Bows weaker than the magic shortbow (the best bow). Magic longbow is kept
+// (same range attack as the shortbow), so only the strictly-lower bows hide.
+const LOW_BOW_KEYS = new Set(['shortbow', 'oak_shortbow', 'willow_shortbow',
+  'maple_shortbow', 'yew_shortbow', 'yew_longbow']);
 function tierOf(key){
   if (!key) return null;
   const k = key.toLowerCase();
+  if (LOW_BOW_KEYS.has(k)) return 'low_bows';
   if (LEATHER_KEYS.has(k)) return 'leather';
   if (MAGE_1DEF_KEYS.has(k)) return 'mage_1def';
   if (/dhide|d-hide|vamb/.test(k)){
@@ -931,7 +937,7 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
             // Special-attack weapon: a 2nd weapon brought only to spec on cooldown.
             const specOpts = ct==='melee'
               ? [['none','None'],['dragon_dagger','Dragon dagger (DDS)'],['dragon_longsword','Dragon longsword'],['dragon_mace','Dragon mace'],['dragon_halberd','Dragon halberd']]
-              : [['none','None'],['magic_shortbow','Magic shortbow']];
+              : [['none','None'],['magic_shortbow','Magic shortbow'],['magic_longbow','Magic longbow']];
             const dbaOn = ct==='melee' && (input.boosts||[]).includes('dba_spec');
             const cur0 = input.specWeapon || 'none';
             // Guard against a leftover spec key from the other combat type
@@ -947,6 +953,18 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
                 <SearchSelect value={cur} onChange={k=>set('specWeapon', k)} disabled={dbaOn}
                   placeholder="Type to search…"
                   options={specOpts.map(([k,lbl])=>({ key:k, label:lbl }))} />
+                {/* Thrown main has no arrow slot, but a bow spec fires arrows —
+                    let the user pick which arrows the spec uses from the quiver. */}
+                {ct==='ranged' && rangedMode==='thrown' && (cur==='magic_shortbow' || cur==='magic_longbow') && (
+                  <div style={{marginTop:8}}>
+                    <div className="label-cap" style={{marginBottom:6}}>Spec arrows <span style={{color:'var(--text-3)'}}>· quiver for the bow spec</span></div>
+                    <SearchSelect value={input.specAmmo || 'rune_arrow'} onChange={k=>set('specAmmo', k)}
+                      placeholder="Type to search arrows…"
+                      options={Object.entries(E.ARROWS)
+                        .filter(([k,v])=>v.kind==='arrow' && (k===(input.specAmmo||'rune_arrow') || !tierHidden(k, hiddenTiers)))
+                        .map(([k,v])=>({ key:k, label:v.name, hint:`+${v.rangeBonus} rng` }))} />
+                  </div>
+                )}
                 {dbaOn && (
                   <div style={{marginTop:6, fontFamily:'var(--mono)', fontSize:10, color:'var(--red)', lineHeight:1.5}}>
                     DBA spec is your strength source — all spec energy goes to that, so no DPS spec weapon.
@@ -2506,7 +2524,7 @@ function SettingsPane({input, hiddenTiers = {}, setHiddenTiers}){
                 border:'1px solid '+(on?'color-mix(in oklab, var(--amber) 45%, var(--border-2))':'var(--border-2)'),
                 background: on?'color-mix(in oklab, var(--amber) 12%, var(--bg-2))':'var(--bg-2)',
                 fontFamily:'var(--mono)', fontSize:11, color: on?'var(--amber)':'var(--text-1)'}}>
-                <span>Hide {t.label.toLowerCase()} gear</span>
+                <span>{t.full || ('Hide ' + t.label.toLowerCase() + ' gear')}</span>
                 <input type="checkbox" checked={on}
                   onChange={e=>setHiddenTiers && setHiddenTiers({...hiddenTiers, [t.key]: e.target.checked})} />
               </label>
@@ -2615,7 +2633,7 @@ function saveInput(input){
 const SETUP_FIELDS = [
   'combatType','style','prayers','boosts','weapon','weaponName','ammo',
   'ammoRangeBonus','spell','spellBase','charge','gear','accBonus','dmgBonus',
-  'attackSpeed','sustained','repotThreshold','ringOfWealth','specWeapon','trip',
+  'attackSpeed','sustained','repotThreshold','ringOfWealth','specWeapon','specAmmo','trip',
 ];
 const pickSetup = (s) => Object.fromEntries(SETUP_FIELDS.map(f => [f, s[f]]));
 

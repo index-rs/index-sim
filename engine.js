@@ -418,6 +418,9 @@
     dragon_halberd:   { combat:'melee',  cost:30, hits:2, dmgMult:1.10, accMult:1.00, defField:'defSlash', rngLvlBonus:0 },
     dragon_mace:      { combat:'melee',  cost:25, hits:1, dmgMult:1.50, accMult:1.25, defField:'defCrush', rngLvlBonus:0 },
     magic_shortbow:   { combat:'ranged', cost:35, hits:2, dmgMult:1.00, accMult:10/7, defField:'defRange', rngLvlBonus:10 },
+    // Magic longbow "Powershot" (pvm_magic_longbow.rs2 @274): 1 GUARANTEED hit,
+    // +10 ranged levels into the max hit, no accuracy roll or damage multiplier.
+    magic_longbow:    { combat:'ranged', cost:35, hits:1, dmgMult:1.00, accMult:1.00, defField:'defRange', rngLvlBonus:10, guaranteedHit:true },
   };
   // Special-attack energy regen — derived from rev274 combat.constant:
   //   sa_max_energy=1000, sa_regen_amount=100, sa_regen_interval=50 ticks.
@@ -682,23 +685,44 @@
     if (sd && !dba && sd.combat === input.combatType){
       const specW = WEAPONS[specKey] || { accBonus:0, dmgBonus:0, speed:4 };
       const mainW = WEAPONS[input.weapon] || { accBonus:0, dmgBonus:0 };
-      const ammoBonus = input.combatType === 'ranged' ? (input.ammoRangeBonus || 0) : 0;
-      // Swap the weapon's equip contribution: take the gear total, remove the
-      // main weapon's bonus, add the spec weapon's.
-      const accBonusSpec = accBonusEff - (mainW.accBonus || 0) + (specW.accBonus || 0);
-      const dmgBonusSpec = (input.dmgBonus || 0) - (mainW.dmgBonus || 0) + (specW.dmgBonus || 0);
+      // Spec offence bonuses. Preferred path: rebuild the ACTUAL spec loadout via
+      // the gear registry — swap in the spec weapon (sumBonuses auto-drops the
+      // off-hand when it's two-handed, e.g. a halberd or bow, so an equipped
+      // book/shield is correctly ignored) and, for a bow spec, load the chosen
+      // spec arrows (input.specAmmo) since a thrown main has no arrow slot.
+      let accBonusSpec, dmgBonusSpec, specAmmoBonus = 0;
+      const EQ = (typeof window !== 'undefined') ? window.Equipment : null;
+      if (EQ && input.gear){
+        let specAmmoKey = 'none';
+        if (input.combatType === 'ranged' && specW.sub === 'bow'){
+          specAmmoKey = input.specAmmo || (mainW.sub === 'bow' ? input.ammo : 'rune_arrow');
+        }
+        const sb = EQ.sumBonuses({ ...input.gear, weapon: specKey, ammo: specAmmoKey });
+        if (input.combatType === 'ranged'){ accBonusSpec = sb.rngAtt; dmgBonusSpec = sb.rngStr; }
+        else if (input.combatType === 'melee'){ accBonusSpec = sb.slashAtt; dmgBonusSpec = sb.str; }
+        else { accBonusSpec = sb.magAtt; dmgBonusSpec = 0; }
+        // sumBonuses already folded the arrow rangebonus into rng att + str.
+      } else {
+        // Fallback (no gear/registry): swap the weapon's flat bonus on the totals.
+        const ammoBonus = input.combatType === 'ranged' ? (input.ammoRangeBonus || 0) : 0;
+        accBonusSpec = accBonusEff - (mainW.accBonus || 0) + (specW.accBonus || 0);
+        dmgBonusSpec = (input.dmgBonus || 0) - (mainW.dmgBonus || 0) + (specW.dmgBonus || 0);
+        specAmmoBonus = ammoBonus;
+      }
       const attRollSpec  = roll(effAcc, accBonusSpec) * sd.accMult;
       const defBonusSpec = m[sd.defField] ?? 0;
       const defRollSpec  = (monDefLvl + 9) * (defBonusSpec + 64);
       const hcSpec       = hitChance(attRollSpec, defRollSpec);
+      // Powershot (magic longbow) always hits — its script has no accuracy roll.
+      const hcSpecEff    = sd.guaranteedHit ? 1 : hcSpec;
       let mhSpec;
       if (input.combatType === 'ranged'){
-        // MSB: +10 ranged levels into the max-hit only (not accuracy).
-        mhSpec = maxHitRanged(effDmg + sd.rngLvlBonus, dmgBonusSpec + ammoBonus);
+        // +ranged levels (MSB/MLB add 10) into the max-hit only (not accuracy).
+        mhSpec = maxHitRanged(effDmg + sd.rngLvlBonus, dmgBonusSpec + specAmmoBonus);
       } else {
         mhSpec = Math.floor(maxHitMelee(effDmg, dmgBonusSpec) * sd.dmgMult);
       }
-      const expPerSpec    = sd.hits * hcSpec * (mhSpec / 2);   // expected spec damage
+      const expPerSpec    = sd.hits * hcSpecEff * (mhSpec / 2);   // expected spec damage
       const specsPerHour  = SA_REGEN_PER_HOUR / sd.cost;
       const specSecPerHr  = specsPerHour * (specW.speed || 4) * TICK_SECONDS;
       const normalDmgPerHr= dps * Math.max(0, 3600 - specSecPerHr);
@@ -708,7 +732,7 @@
         weapon: specW.name, key: specKey,
         specsPerHour: specsPerHour,
         expPerSpec: expPerSpec,
-        maxHit: mhSpec, hits: sd.hits, hitChance: hcSpec,
+        maxHit: mhSpec, hits: sd.hits, hitChance: hcSpecEff,
         dpsBase: dps, dpsWithSpec: effDps,
         dpsGainPct: dps > 0 ? (effDps / dps - 1) * 100 : 0,
       };
