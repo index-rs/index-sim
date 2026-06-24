@@ -448,7 +448,11 @@ const MONSTERS = [
   // =====================================================================
 
   { id:'chicken', name:'Chicken', level:1, hp:3, attack:1, strength:1, defLevel:1, defStab:-42, defSlash:-42, defCrush:-42, defRange:-42, defMagic:-42, attBonus:-47, strBonus:-42, attackSpeed:4,
-    loot:[ always('Bones',1,'bones'), always('Feathers',5,'feather'), always('Raw chicken',1,'raw_chicken') ] },
+    // chicken.rs2 @274: death_drop=bones (always) + raw_chicken (always). Feathers
+    // are an "Other" roll on random(128): <32 → 15 feathers, <64 → 5 feathers,
+    // else nothing (so feathers drop only half the time).
+    loot:[ always('Bones',1,'bones'), always('Raw chicken',1,'raw_chicken'),
+      d('Feathers ×15',32,15,'feather'), d('Feathers ×5',32,5,'feather') ] },
 
   { id:'cow', name:'Cow', level:2, hp:8, attack:1, strength:1, defLevel:1, defStab:-21, defSlash:-21, defCrush:-21, defRange:-21, defMagic:-21, attBonus:-15, strBonus:-15, attackSpeed:4,
     loot:[ always('Cowhide',1,'cow_hide'), always('Raw beef',1,'raw_beef') ] },

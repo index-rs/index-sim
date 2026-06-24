@@ -81,40 +81,44 @@
   // Only items that existed in late-2004 rev 274 are included.
   // ====================================================================
   const WEAPONS = {
-    // melee — rune + dragon tiers only (lower tiers omitted by design)
-    rune_scimitar:    { name:'Rune scimitar',     type:'melee', wclass:'scimitar', accBonus:45, dmgBonus:44, speed:4, alch:15360 },
-    // melee — dragon weapons
-    dragon_dagger:    { name:'Dragon dagger',     type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:18000, stab:true },
-    // Dragon dagger(p) — identical combat stats to the dragon dagger, plus weapon
-    // poison. poison_severity=20 (daggers.obj @ rev274); alch = floor(24000×0.6).
-    dragon_dagger_p:  { name:'Dragon dagger(p)',  type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:14400, stab:true, poisonSeverity:20 },
+    // melee weapons — grouped best → worst (dragon, then rune→iron scimitars).
+    // accBonus=slashattack, dmgBonus=strengthbonus. EXACT from *.obj @274.
     dragon_longsword: { name:'Dragon longsword',  type:'melee', wclass:'longsword', accBonus:69, dmgBonus:71, speed:5, alch:60000 },
-    dragon_halberd:   { name:'Dragon halberd',    type:'melee', wclass:'halberd',  accBonus:95, dmgBonus:89, speed:7, alch:150000, twoHand:true },
-    // Dragon mace — the only CRUSH melee weapon here (maces.obj @rev274:
-    // crushattack 60, strengthbonus 55, attackrate 5). Has a spec (sa_energy
-    // 250 = 25%, "Punish": ×1.5 dmg ×1.25 acc vs crush). alch = floor(50000×0.6).
     dragon_mace:      { name:'Dragon mace',       type:'melee', wclass:'mace',     accBonus:60, dmgBonus:55, speed:5, alch:30000 },
-    // ranged — bows (shortbow rate 4, longbow rate 6). dmgBonus=0; ammo adds str.
-    maple_shortbow:   { name:'Maple shortbow',    type:'ranged', sub:'bow', accBonus:29, dmgBonus:0,  speed:4, alch:240, twoHand:true },
-    yew_shortbow:     { name:'Yew shortbow',      type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:4, alch:480, twoHand:true },
+    dragon_halberd:   { name:'Dragon halberd',    type:'melee', wclass:'halberd',  accBonus:95, dmgBonus:89, speed:7, alch:150000, twoHand:true },
+    dragon_dagger:    { name:'Dragon dagger',     type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:18000, stab:true },
+    // Dragon dagger(p) — identical combat stats plus weapon poison (severity 20).
+    dragon_dagger_p:  { name:'Dragon dagger(p)',  type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:14400, stab:true, poisonSeverity:20 },
+    rune_scimitar:    { name:'Rune scimitar',     type:'melee', wclass:'scimitar', accBonus:45, dmgBonus:44, speed:4, alch:15360 },
+    adamant_scimitar: { name:'Adamant scimitar',  type:'melee', wclass:'scimitar', accBonus:29, dmgBonus:28, speed:4, alch:1536 },
+    mithril_scimitar: { name:'Mithril scimitar',  type:'melee', wclass:'scimitar', accBonus:21, dmgBonus:20, speed:4, alch:624 },
+    black_scimitar:   { name:'Black scimitar',    type:'melee', wclass:'scimitar', accBonus:19, dmgBonus:14, speed:4, alch:460 },
+    steel_scimitar:   { name:'Steel scimitar',    type:'melee', wclass:'scimitar', accBonus:15, dmgBonus:14, speed:4, alch:240 },
+    iron_scimitar:    { name:'Iron scimitar',     type:'melee', wclass:'scimitar', accBonus:10, dmgBonus:9,  speed:4, alch:67 },
+    // ranged — bows, best → worst. dmgBonus=0; ammo adds str. EXACT rangeattack
+    // from bows.obj @274 (shortbow rate 4, longbow rate 6).
     magic_shortbow:   { name:'Magic shortbow',    type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:4, alch:960, twoHand:true },
-    yew_longbow:      { name:'Yew longbow',       type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:6, alch:768, twoHand:true },
     magic_longbow:    { name:'Magic longbow',     type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:6, alch:1536, twoHand:true },
-    // thrown weapons (knives & darts, attackrate 3) — mainhand slot, so they
-    // CAN'T be used with a bow. accBonus/dmgBonus 0; the item is its own ammo
-    // (ammoKey → the matching ARROWS entry that carries its ranged strength).
-    bronze_knife_w:   { name:'Bronze knives (thrown)', type:'ranged', sub:'thrown', ammoKey:'bronze_knife', accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    iron_knife_w:     { name:'Iron knives (thrown)',   type:'ranged', sub:'thrown', ammoKey:'iron_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    steel_knife_w:    { name:'Steel knives (thrown)',  type:'ranged', sub:'thrown', ammoKey:'steel_knife',  accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    mith_knife_w:     { name:'Mithril knives (thrown)',type:'ranged', sub:'thrown', ammoKey:'mith_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    addy_knife_w:     { name:'Adamant knives (thrown)',type:'ranged', sub:'thrown', ammoKey:'addy_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    yew_shortbow:     { name:'Yew shortbow',      type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:4, alch:480, twoHand:true },
+    yew_longbow:      { name:'Yew longbow',       type:'ranged', sub:'bow', accBonus:47, dmgBonus:0,  speed:6, alch:768, twoHand:true },
+    maple_shortbow:   { name:'Maple shortbow',    type:'ranged', sub:'bow', accBonus:29, dmgBonus:0,  speed:4, alch:240, twoHand:true },
+    willow_shortbow:  { name:'Willow shortbow',   type:'ranged', sub:'bow', accBonus:20, dmgBonus:0,  speed:4, alch:120, twoHand:true },
+    oak_shortbow:     { name:'Oak shortbow',      type:'ranged', sub:'bow', accBonus:14, dmgBonus:0,  speed:4, alch:60,  twoHand:true },
+    shortbow:         { name:'Shortbow',          type:'ranged', sub:'bow', accBonus:8,  dmgBonus:0,  speed:4, alch:30,  twoHand:true },
+    // thrown weapons (knives & darts, attackrate 3) — mainhand slot, best → worst.
+    // accBonus/dmgBonus 0; the item is its own ammo (ammoKey → ARROWS entry).
     rune_knife_w:     { name:'Rune knives (thrown)',   type:'ranged', sub:'thrown', ammoKey:'rune_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    bronze_dart_w:    { name:'Bronze darts (thrown)',  type:'ranged', sub:'thrown', ammoKey:'bronze_dart',  accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    iron_dart_w:      { name:'Iron darts (thrown)',    type:'ranged', sub:'thrown', ammoKey:'iron_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    steel_dart_w:     { name:'Steel darts (thrown)',   type:'ranged', sub:'thrown', ammoKey:'steel_dart',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    mith_dart_w:      { name:'Mithril darts (thrown)', type:'ranged', sub:'thrown', ammoKey:'mith_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
-    addy_dart_w:      { name:'Adamant darts (thrown)', type:'ranged', sub:'thrown', ammoKey:'addy_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    addy_knife_w:     { name:'Adamant knives (thrown)',type:'ranged', sub:'thrown', ammoKey:'addy_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    mith_knife_w:     { name:'Mithril knives (thrown)',type:'ranged', sub:'thrown', ammoKey:'mith_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    steel_knife_w:    { name:'Steel knives (thrown)',  type:'ranged', sub:'thrown', ammoKey:'steel_knife',  accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    iron_knife_w:     { name:'Iron knives (thrown)',   type:'ranged', sub:'thrown', ammoKey:'iron_knife',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    bronze_knife_w:   { name:'Bronze knives (thrown)', type:'ranged', sub:'thrown', ammoKey:'bronze_knife', accBonus:0, dmgBonus:0, speed:3, alch:0 },
     rune_dart_w:      { name:'Rune darts (thrown)',    type:'ranged', sub:'thrown', ammoKey:'rune_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    addy_dart_w:      { name:'Adamant darts (thrown)', type:'ranged', sub:'thrown', ammoKey:'addy_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    mith_dart_w:      { name:'Mithril darts (thrown)', type:'ranged', sub:'thrown', ammoKey:'mith_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    steel_dart_w:     { name:'Steel darts (thrown)',   type:'ranged', sub:'thrown', ammoKey:'steel_dart',   accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    iron_dart_w:      { name:'Iron darts (thrown)',    type:'ranged', sub:'thrown', ammoKey:'iron_dart',    accBonus:0, dmgBonus:0, speed:3, alch:0 },
+    bronze_dart_w:    { name:'Bronze darts (thrown)',  type:'ranged', sub:'thrown', ammoKey:'bronze_dart',  accBonus:0, dmgBonus:0, speed:3, alch:0 },
     // magic — elemental staves (rate 5, +10 magic attack). Each provides its
     // element rune for free (`provides`), so e.g. a fire staff casting fire
     // spells pays no fire runes. All identical combat-wise in rev 274.
@@ -259,12 +263,12 @@
   // `price` field is the fallback. Strength values verified vs @274 knives/
   // darts.obj (rangebonus param) — identical to ours.
   const ARROWS = {
-    bronze_arrow:  { name:'Bronze arrow',  kind:'arrow', rangeBonus:7,  alch:1,   price:1,   priceKey:'bronze_arrow' },
-    iron_arrow:    { name:'Iron arrow',    kind:'arrow', rangeBonus:10, alch:1,   price:3,   priceKey:'iron_arrow' },
-    steel_arrow:   { name:'Steel arrow',   kind:'arrow', rangeBonus:16, alch:7,   price:12,  priceKey:'steel_arrow' },
-    mith_arrow:    { name:'Mithril arrow', kind:'arrow', rangeBonus:22, alch:19,  price:32,  priceKey:'mithril_arrow' },
-    addy_arrow:    { name:'Adamant arrow', kind:'arrow', rangeBonus:31, alch:48,  price:80,  priceKey:'adamant_arrow' },
     rune_arrow:    { name:'Rune arrow',    kind:'arrow', rangeBonus:49, alch:240, price:400, priceKey:'rune_arrow' },
+    addy_arrow:    { name:'Adamant arrow', kind:'arrow', rangeBonus:31, alch:48,  price:80,  priceKey:'adamant_arrow' },
+    mith_arrow:    { name:'Mithril arrow', kind:'arrow', rangeBonus:22, alch:19,  price:32,  priceKey:'mithril_arrow' },
+    steel_arrow:   { name:'Steel arrow',   kind:'arrow', rangeBonus:16, alch:7,   price:12,  priceKey:'steel_arrow' },
+    iron_arrow:    { name:'Iron arrow',    kind:'arrow', rangeBonus:10, alch:1,   price:3,   priceKey:'iron_arrow' },
+    bronze_arrow:  { name:'Bronze arrow',  kind:'arrow', rangeBonus:7,  alch:1,   price:1,   priceKey:'bronze_arrow' },
     // Thrown weapons (knives/darts) — auto-paired with their thrown weapon.
     bronze_knife:  { name:'Bronze knife',  kind:'thrown', tier:0, fam:'knife', barKey:'bronze_bar',    rangeBonus:3,  alch:1,   price:2,   priceKey:'bronze_knife' },
     iron_knife:    { name:'Iron knife',    kind:'thrown', tier:1, fam:'knife', barKey:'iron_bar',      rangeBonus:4,  alch:1,   price:4,   priceKey:'iron_knife' },
