@@ -77,6 +77,8 @@
     mithril_chainbody:'mithril_chainbody',
     adamant_platelegs:'adamant_platelegs',
     adamant_full_helm:'adamant_full_helm',
+    // accessory — ring of recoil supply cost tracks the live market
+    ring_of_recoil:  'ring_of_recoil',
   };
 
   // Fetch the last N sold prices + high-alch value for one item.
