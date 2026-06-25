@@ -2533,8 +2533,8 @@ function DuelPane({input, set}){
         </span>
       </div>
 
-      <div style={{padding:'0 14px 16px'}}>
-        <table className="table" style={{width:'100%'}}>
+      <div style={{padding:'0 14px 16px', overflowX:'auto'}}>
+        <table className="table" style={{width:'100%', fontSize:11}}>
           <thead>
             <tr>
               <th style={{whiteSpace:'nowrap'}}>Setup</th>
@@ -2543,10 +2543,10 @@ function DuelPane({input, set}){
               <th className="right">DPS</th>
               <th className="right">Hit %</th>
               <th className="right">K/trip</th>
-              <th className="right">Eff XP/hr</th>
-              <th className="right">Eff net GP/hr</th>
-              <th className="right">GP / XP</th>
-              <th className="right">Supplies/hr</th>
+              <th className="right" style={{whiteSpace:'nowrap'}}>XP/hr</th>
+              <th className="right" style={{whiteSpace:'nowrap'}}>Net GP/hr</th>
+              <th className="right" style={{whiteSpace:'nowrap'}}>GP/XP</th>
+              <th className="right" style={{whiteSpace:'nowrap'}}>Supp/hr</th>
               <th></th>
             </tr>
           </thead>
@@ -2566,9 +2566,9 @@ function DuelPane({input, set}){
                       ? <span style={{color:'var(--teal)'}}>▸ Live loadout</span>
                       : <input className="input" value={row.name}
                           onChange={e=>rename(row.i, e.target.value)}
-                          style={{width:130, padding:'2px 6px', fontSize:11}} />}
+                          style={{width:104, padding:'2px 6px', fontSize:11}} />}
                   </td>
-                  <td style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', whiteSpace:'nowrap'}}>{loadoutLabel(src)}</td>
+                  <td style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={loadoutLabel(src)}>{loadoutLabel(src)}</td>
                   <td className="right num">{fmtInt(r.maxHit)}</td>
                   <td className="right num">{fmt2(r.dps)}</td>
                   <td className="right num">{fmtPct(r.hitChance)}</td>
