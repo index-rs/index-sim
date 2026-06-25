@@ -50,6 +50,7 @@
     restore:        { name:'Restore (for DBA spec)', vials:1, priceKey:'restore_potion', fallback:200 },
     prayer:         { name:'Prayer potion',  vials:1, priceKey:'prayer_potion',  fallback:7000 },
     antifire:       { name:'Antifire potion', vials:1, priceKey:'antifire_potion', fallback:4200 },
+    antipoison:     { name:'Super antipoison', vials:1, priceKey:'super_antipoison', fallback:760 },
   };
 
   // Stackable loot occupies ONE slot per item type for the whole trip; a
@@ -146,12 +147,25 @@
       else                     dragonfire = 20;
       hpPerKill += dragonfire;
     }
+    // Poison — some monsters (poison spiders, tribesmen) inflict poison while
+    // you fight them unprotected. It's a damage-over-time, not blocked by
+    // protection prayers; we model ~one poison cycle's worth of chip per kill
+    // (it starts at poisonMax and ticks down). Super-antipoison gives immunity
+    // → 0; at monsters that DROP antipoison (tribesmen) you sustain immunity
+    // from their drops, so it's free. Only relevant when NOT safespotting
+    // (safespot returns 0 above before reaching here).
+    let poison = 0;
+    if (m.poisons){
+      const onAnti = !!m.antipoisonFromDrops || !!(input.trip && input.trip.antipoison);
+      poison = onAnti ? 0 : (m.poisonMax ?? 5);
+      hpPerKill += poison;
+    }
     // HP regenerates ~1 hp/min. Over a full kill cycle (kill + overhead +
     // re-engage) you heal some of the damage back — on slow, low-damage
     // targets (e.g. chaos druids) regen out-paces incoming, so net food = 0.
     const netHpPerKill = Math.max(0, hpPerKill - regenPerKill);
     return { hpPerKill, netHpPerKill, regenPerKill, monMax, hitChance: hc,
-             dragonfire, protected: isProt, safespot:false, safespotAuto };
+             dragonfire, poison, protected: isProt, safespot:false, safespotAuto };
   }
 
   // Full trip computation. ctx = { m, ttk, cycle, kph, lootBreakdown, dba,
@@ -222,6 +236,20 @@
       potionParts.push(singleDose ? `${potionDoses} antifire` : `${potionSets} antifire`);
     }
 
+    // Super antipoison — only meaningful vs a poisonous monster you're NOT
+    // safespotting. Carried like any combat potion (vial/single-dose). At
+    // monsters that DROP antipoison (tribesmen) you sustain immunity from the
+    // drops, so we carry NONE — no slots, no cost (antipoisonFromDrops).
+    const antipoisonOn = !!t.antipoison && !!(ctx.m && ctx.m.poisons)
+      && !(ctx.m && ctx.m.antipoisonFromDrops);
+    let antipoisonSlots = 0, antipoisonDoses = 0;
+    if (antipoisonOn){
+      antipoisonSlots = qtyPerType;
+      antipoisonDoses = dosesPerType;
+      potionSlots += antipoisonSlots;
+      potionParts.push(singleDose ? `${potionDoses} antipoison` : `${potionSets} antipoison`);
+    }
+
     // Prayer potions — needed whenever active prayers drain points (offensive
     // prayers and/or a protection prayer). Carried like any combat potion
     // (vial/single-dose mode). Each dose restores floor(prayerLevel/4)+7 points;
@@ -253,6 +281,7 @@
     for (const c of potionCats) potionCostPerTrip += dosesPerType * perDose(CAT_POTION[c]);
     if (dbaRestore) potionCostPerTrip += restoreDoses * perDose('restore');
     if (antifireOn) potionCostPerTrip += antifireDoses * perDose('antifire');
+    if (antipoisonOn) potionCostPerTrip += antipoisonDoses * perDose('antipoison');
 
     // --- fixed reserve (locked the whole trip) ---
     let reserve = 0;
@@ -273,6 +302,34 @@
     if (ctx.combatType === 'magic'){
       const rs = t.runeSlots ?? 2;
       reserve += rs; if (rs) reserveParts.push(`${rs} combat-rune`);
+    }
+    // Dwarf cannon: 4 parts + 1 (stackable) cannonball slot stay locked the
+    // whole trip — they never convert to loot space. (Balls stack, so a big
+    // reload pile is still just one slot; the gp cost is handled in the engine.)
+    if (ctx.cannonOn){ reserve += 5; reserveParts.push('cannon (4 parts)', 'cannonballs'); }
+
+    // --- ring of recoil: spare rings lock slots, rings shatter at 40 dmg ---
+    // The 1st ring is equipped (free); each spare you carry (count-1) locks one
+    // inv slot the whole trip. Every ring absorbs 40 reflected dmg before it
+    // shatters, so rings used/kill = recoilDmg/40 (a per-kill supply cost). We
+    // assume every ring carried starts FULL — in 2004 you can't check a worn
+    // ring's remaining charges — so total capacity = count × 40 dmg, which can
+    // make the trip RECOIL-BOUND (you bank when the rings run out).
+    const recoilDmgPerKill = ctx.recoilDmgPerKill || 0;
+    const recoilOn = !!ctx.ringRecoil && recoilDmgPerKill > 0;
+    let recoilRings = 0, recoilSpares = 0, recoilRingsPerKill = 0,
+        recoilCostPerKill = 0, maxKillsRecoil = Infinity;
+    if (recoilOn){
+      recoilRings = Math.max(1, Math.floor(t.recoilRings ?? 1));
+      recoilSpares = recoilRings - 1;
+      if (recoilSpares > 0){
+        reserve += recoilSpares;
+        reserveParts.push(`${recoilSpares} recoil ring${recoilSpares>1?'s':''}`);
+      }
+      recoilRingsPerKill = recoilDmgPerKill / 40;
+      const ringPrice = (window.GameData?.ITEM_PRICES?.ring_of_recoil) ?? 1500;
+      recoilCostPerKill = recoilRingsPerKill * ringPrice;
+      maxKillsRecoil = recoilDmgPerKill > 0 ? (recoilRings * 40) / recoilDmgPerKill : Infinity;
     }
 
     // --- incoming damage → food/kill ---
@@ -460,6 +517,25 @@
       }
     }
 
+    // Recoil-bound cap: if your rings' total charges (count × 40 dmg) run out
+    // before food/loot/prayer end the trip, the rings are the binding constraint
+    // — recompute the (shorter) trip's loot fraction and banking efficiency.
+    if (recoilOn && isFinite(maxKillsRecoil) && maxKillsRecoil < killsPerTrip){
+      killsPerTrip = Math.max(1, maxKillsRecoil);
+      bound = 'recoil';
+      const dropped = nonStackPerKill * killsPerTrip;
+      const collected = Math.min(lootCapacity, dropped, freeAtStart + (foodPerKill + potRate) * killsPerTrip);
+      lootFraction = dropped > 0 ? Math.min(1, collected / dropped) : 1;
+      lootSlotsAtEnd = collected;
+      foodLeftAtEnd = Math.max(0, foodCount - foodPerKill * killsPerTrip);
+      if (bankSeconds > 0){
+        const killTripTime = killsPerTrip * cycle;
+        efficiency = killTripTime / (killTripTime + bankSeconds);
+        effectiveKph = ctx.kph * efficiency;
+        tripMinutes = (killTripTime + bankSeconds) / 60;
+      }
+    }
+
     // supplies cost per kill (food eaten + potions consumed). Prayer potions are
     // consumed at the drain rate, so they're costed per kill (like food), not as
     // a flat per-trip vial count.
@@ -477,6 +553,8 @@
       potionCostPerKill, potionCostPerTrip, singleDose, dosesPerType,
       prayerActive, prayerPerKill, prayerCostPerKill, prayerSlots,
       prayerPointsPerDose, maxKillsPrayer,
+      recoilOn, recoilRings, recoilSpares, recoilRingsPerKill,
+      recoilCostPerKill, maxKillsRecoil, recoilDmgPerKill,
       incoming: inc, eatenFood,
       slots: {
         inv: INV, reserve, reserveParts, stackReserve, foodCount, potionSlots,

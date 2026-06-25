@@ -756,13 +756,43 @@
       poisonHit = Math.floor((poisonSev + 4) / 5);     // 4 for severity 20
       poisonDps = poisonHit / (30 * TICK_SECONDS);     // 30 ticks = 18s ⇒ ~0.222 dmg/s
     }
-    const killDps    = effDps + poisonDps;
+
+    // ---- Ring of recoil -------------------------------------------------
+    // A worn ring of recoil reflects floor(dmg/10)+1 back at the attacker for
+    // every DAMAGING hit you take (npc_combat.rs2 @274: combat_damage_player →
+    // recoil = scale(10,100,$damage)+1, capped at the npc's remaining HP, and
+    // the ring loses that many of its 40 charges). Like poison it KILLS FASTER
+    // (shorter ttk → more kills/hr) but grants NO combat xp, and only applies
+    // while you're actually being hit (zero while safespotted). Per-second rate
+    // (so it's not circular with ttk): damaging-hits/sec × recoil/hit, where the
+    // avg landed hit deals ~monMax/2 ⇒ recoil/hit ≈ monMax/20 + 1.
+    // NOTE: the @274 script gates recoil on map_members=true (members areas
+    // only); the sim can't tell members vs f2p per-monster, so it's applied
+    // regardless — see the UI caveat.
+    let recoilDps = 0, recoilPerHit = 0, recoilDmgTakenPerHit = 0;
+    const ringRecoil = !!(input.gear && input.gear.ring === 'ring_of_recoil');
+    if (ringRecoil && window.TripModel?.computeIncoming){
+      const incR = window.TripModel.computeIncoming(input, {
+        m, combatType: input.combatType, prayerDef: prayer.def, ttk: 0, cycle: 0,
+      });
+      if (!incR.safespot && incR.hitChance > 0 && incR.monMax > 0){
+        const atkInt = (m.attackSpeed || 4) * 0.6;
+        recoilDmgTakenPerHit = incR.monMax / 2;
+        recoilPerHit = recoilDmgTakenPerHit / 10 + 1;       // floor(d/10)+1, averaged
+        recoilDps = (incR.hitChance / atkInt) * recoilPerHit;
+      }
+    }
+
+    const killDps    = effDps + poisonDps + recoilDps;
     const directFrac = killDps > 0 ? effDps / killDps : 1;
 
     // Overkill correction: last hit exceeds remaining HP by an average of maxHit/4.
     // TTK uses HP + overkill for timing; XP is always exactly 4×HP regardless.
     const overkillEst = mh / 4;
     const ttk = (m.hp + overkillEst) / killDps;
+    // Total recoil damage reflected over one (shortened) kill — drives ring
+    // charge use / supply cost in the trip model (40 charges per ring).
+    const recoilDmgPerKill = recoilDps * ttk;
     // Per-kill overhead = time spent NOT attacking: looting, repositioning,
     // walking between spawns. Defaults scale 2–4s with how much looting/roaming
     // a kill needs (see defaultOverhead); a per-monster override (input.overheadSec)
@@ -770,6 +800,148 @@
     const overhead = (input.overheadSec != null) ? input.overheadSec : defaultOverhead(m);
     let cycle = ttk + overhead;
     let kph = 3600 / cycle;
+
+    // ====================================================================
+    // DWARF MULTICANNON OVERLAY
+    // Source: 2004Scape/Server quest_mcannon/scripts/cannon_fire.rs2.
+    //  - Damage  = randominc(min(30, max_dealt)) -> uniform 0..30, avg 15.
+    //              Flat; independent of your Ranged level / gear / potions.
+    //  - Accuracy= ~player_npc_hit_roll(%damagetype): YOUR normal hit roll for
+    //              the EQUIPPED weapon + stance vs the monster's defence for
+    //              that damage type -- exactly the `hc` computed above. (So a
+    //              slash scimitar drives the cannon's roll vs slash defence; a
+    //              bow -> ranged roll; a staff -> magic roll.)
+    //  - XP      = 2 Ranged xp per damage, NO hitpoints xp, nothing else.
+    //  - Fire    = the cannon_rotate timer ticks EVERY game tick (0.6s),
+    //              sweeping 8 octants in turn; it fires <=1 ball/tick and only
+    //              at an octant that currently holds a target. So per full
+    //              rotation (8 ticks = 4.8s) it fires once per OCCUPIED octant
+    //              (<=8); each ball hits one mob and is spent whether it hits
+    //              or misses.
+    //
+    // Occupancy model (user-requested): monsters die faster than they respawn,
+    // so the spot is rarely full. With N spawn points and respawn R seconds,
+    // Little's law gives the empty (respawning) count = killRate*R, so the
+    // average STANDING target count is E = N - K*R, while the kill rate is
+    //   K = (playerDps + cannonDps(E)) / HP_eff.
+    // Solving the pair self-consistently yields the effective present-target
+    // count E (capped at the cannon's 8 octants), which sets the fire rate,
+    // cannonball burn, and combined kills/hr.
+    let xpDirectFrac = directFrac;
+    let ttkEff = ttk;
+    let playerKillTime = ttk;     // the player's OWN attacking time per kill
+    let cannon = null;
+    let scarce = null;
+    const cn = input.cannon;
+    const sc = input.trip && input.trip.scarce;
+    const scarceOn = !!(sc && sc.enabled) && killDps > 0;
+    const cannonOn = !!(cn && cn.enabled) && killDps > 0;
+    // ────────────────────────────────────────────────────────────────────
+    // SCARCE-SPOT / AFK throttle + cannon overlay share ONE occupancy solve.
+    //  • Scarce mode (trip.scarce): you only fight Nplayer spawns at a time, so
+    //    your kill rate is capped by how fast THEY respawn — K ≤ Nplayer/R.
+    //    Below that cap nothing changes (there's always a target up). Default
+    //    OFF ⇒ Nplayer = ∞ ⇒ legacy "monsters never run out" behaviour.
+    //  • Cannon adds parallel fire over up to its OWN reach (Ncannon octants,
+    //    ≤8), which can differ from the melee count (e.g. 2 in melee, 6 by
+    //    cannon). The two combine on one spot with a shared respawn R: total
+    //    spawn capacity N feeds both; the player is capped at Nplayer/R and the
+    //    cannon mops up the rest of N/R. (See the DWARF MULTICANNON note above
+    //    for the cannon-fire mechanics this models.)
+    if (scarceOn || cannonOn){
+      const kphBefore = kph;                        // solo, spawn-agnostic rate
+      const HpEff = m.hp + overkillEst;
+      const playerDps = killDps;
+      const Rdef = m.respawn ?? 60;
+      const R  = Math.max(1, (scarceOn && sc.respawnSec) || (cn && cn.respawnSec) || Rdef);
+      const Nplayer = scarceOn ? Math.max(1, sc.targets ?? 2) : Infinity;
+      const Ncannon = cannonOn ? Math.max(1, cn.targets ?? 3) : 0;
+      // Total spawns on the spot. Cannon-only (legacy): the cannon's reach
+      // defines it. Scarce-only: the melee count. Both: the larger area.
+      const N = cannonOn
+        ? Math.max(Ncannon, isFinite(Nplayer) ? Nplayer : Ncannon)
+        : Nplayer;
+      // The player can't out-kill the spawns within their OWN (melee) reach.
+      const playerRateCap = isFinite(Nplayer) ? Nplayer / R : Infinity;
+      const pdEff = Math.min(playerDps, playerRateCap * HpEff);
+      const ballMax = Math.min(30, m.cannonMax ?? 30);
+      const avgBall = ballMax / 2;                  // randominc(max) -> uniform 0..max
+      const octCap = cannonOn ? Math.min(8, Ncannon) : 0;   // octants the cannon can service
+      const a = octCap > 0 ? (hc * avgBall) / 4.8 : 0;      // cannon dmg/sec per present target
+      // Closed-form occupancy (cannon-fire branch, E <= octCap octants):
+      let E = a > 0 ? (N - R*pdEff/HpEff) / (1 + R*a/HpEff)
+                    : (N - R*pdEff/HpEff);
+      let ballsPerSec = 0, cannonDmgPerSec = 0, K, activeFrac;
+      if (E < 0){
+        // Reachable only when there is NO scarce player cap (legacy cannon-only):
+        // you out-clear the spawns solo, so the cannon never has a standing
+        // target. Keep kph at the solo (spawn-agnostic) rate rather than
+        // throttling to the respawn ceiling — turning the cannon ON must never
+        // REDUCE your kills/hr. Flagged `idle` so the UI explains it. (With
+        // scarce on, the player cap forces E >= 0, so this branch can't fire.)
+        E = 0; ballsPerSec = 0; cannonDmgPerSec = 0;
+        K = playerDps / HpEff;        // == solo rate
+        activeFrac = 1;
+      } else if (E <= octCap){
+        ballsPerSec = E / 4.8;
+        cannonDmgPerSec = ballsPerSec * hc * avgBall;
+        K = (pdEff + cannonDmgPerSec) / HpEff;      // <= N/R since E >= 0
+        activeFrac = playerDps > 0 ? Math.min(1, pdEff / playerDps) : 1;
+      } else {
+        // More standing targets than the cannon can sweep — OR octCap==0, i.e.
+        // scarce-solo with no cannon: cannon fire saturates at octCap octants.
+        ballsPerSec = octCap / 4.8;
+        cannonDmgPerSec = ballsPerSec * hc * avgBall;
+        K = (pdEff + cannonDmgPerSec) / HpEff;
+        E = N - K*R;                                // true occupancy (may exceed octCap)
+        if (E < 0){                                 // respawn-bound even saturated
+          K = N/R;
+          const totalDmg = K*HpEff;
+          const playerContribution = Math.min(pdEff, totalDmg);
+          cannonDmgPerSec = Math.max(0, totalDmg - playerContribution);
+          ballsPerSec = (hc*avgBall) > 0 ? cannonDmgPerSec/(hc*avgBall) : 0;
+          activeFrac = playerDps > 0 ? playerContribution/playerDps : 0;
+          E = 0;
+        } else {
+          activeFrac = playerDps > 0 ? Math.min(1, pdEff / playerDps) : 1;
+        }
+      }
+      ttkEff = K > 0 ? 1 / K : ttk;                 // combined seconds per kill
+      playerKillTime = activeFrac * ttkEff;          // player's attacking time / kill
+      cycle = ttkEff + overhead;                     // looting overhead still applies
+      kph = 3600 / cycle;
+      // Player xp-damage fraction of the kill: only the player's real-hit
+      // (effDps) damage trains stats, scaled by how busy the player actually is
+      // (activeFrac < 1 when respawn-throttled or sharing kills with a cannon).
+      const playerXpDmgPerKill = (effDps * activeFrac) / Math.max(1e-9, K);
+      xpDirectFrac = m.hp > 0 ? Math.min(1, playerXpDmgPerKill / m.hp) : directFrac;
+      if (cannonOn){
+        const ballPrice = (window.GameData?.ITEM_PRICES?.mcannonball) ?? 180;
+        const ballsPerKill = K > 0 ? ballsPerSec / K : 0;
+        cannon = {
+          enabled: true, targets: Ncannon, respawnSec: R,
+          effTargets: Math.max(0, Math.min(E, N)), maxBall: ballMax,
+          ballsPerSec, ballsPerHour: ballsPerSec*3600, ballsPerKill,
+          ballPrice, ballCostPerKill: ballsPerKill*ballPrice,
+          ballCostPerHour: ballsPerSec*3600*ballPrice,
+          cannonDps: cannonDmgPerSec, cannonDmgPerHour: cannonDmgPerSec*3600,
+          rangedXpPerHour: 2*cannonDmgPerSec*3600,
+          playerDps, activeFrac, kphNoCannon: kphBefore, kphWithCannon: kph,
+          respawnBound: ballsPerSec > 0 && activeFrac < 0.999,
+          idle: ballsPerSec === 0,   // spot too sparse — you out-clear it solo
+        };
+      }
+      if (scarceOn){
+        // Solo throttle report for the Trip-tab UI. kphSolo = what you'd get if
+        // monsters never ran out; kph = the respawn-throttled rate actually used.
+        scarce = {
+          enabled: true, targets: Nplayer, respawnSec: R, cannonTargets: Ncannon,
+          cannonOn, effTargets: Math.max(0, Math.min(E, N)),
+          activeFrac, kphSolo: kphBefore, kph, killRate: K,
+          playerRateCap, respawnBound: activeFrac < 0.999,
+        };
+      }
+    }
 
     // XP routing — use the style's explicit xpDist (verified from 2004scape
     // combat.rs2). Magic gives HALF the XP per damage compared to melee/ranged.
@@ -780,7 +952,7 @@
     // Combat (damage) xp scales with directFrac: poison damage does not train
     // your stats, so only the HP killed by real hits counts. Spell base xp (per
     // cast) is unaffected and added on top.
-    let combatXpPerKill = combatXpRate * m.hp * directFrac;
+    let combatXpPerKill = combatXpRate * m.hp * xpDirectFrac;
     // Magic: base spell XP per cast, ON TOP of damage XP. In 2004scape
     // give_spell_xp runs in pvm_spell_cast — BEFORE the hit roll — so the spell's
     // base xp is awarded on EVERY cast, including splashes (verified @274). The
@@ -792,12 +964,12 @@
       const spell = SPELLS[input.spell];
       const baseXp = spell?.baseXp || 0;
       const avgDmgPerHit = Math.max(1, mh / 2);
-      const landingCasts = m.hp / avgDmgPerHit;
+      const landingCasts = (cannon ? m.hp * xpDirectFrac : m.hp) / avgDmgPerHit;
       const totalCasts = landingCasts / Math.max(0.01, hc);
       spellXpPerKill = baseXp * totalCasts;
       combatXpPerKill += spellXpPerKill;
     }
-    const hpXpPerKill     = hpXpRate * m.hp * directFrac;
+    const hpXpPerKill     = hpXpRate * m.hp * xpDirectFrac;
 
     // NOTE: combatXph / hpXph (the per-HOUR values) are computed later, AFTER
     // any alch-time adjustment to kph (see below), so the headline xp/hr stays
@@ -811,7 +983,7 @@
     // after the loot loop computes it. Keys map to display names in the UI.
     const skillXpPerKill = {};
     for (const [k, v] of Object.entries(xpDist)){
-      skillXpPerKill[k] = (skillXpPerKill[k] || 0) + v * m.hp * directFrac;
+      skillXpPerKill[k] = (skillXpPerKill[k] || 0) + v * m.hp * xpDirectFrac;
     }
     if (spellXpPerKill) skillXpPerKill.mag = (skillXpPerKill.mag || 0) + spellXpPerKill;
     skillXpPerKill.hp = hpXpPerKill;
@@ -953,11 +1125,12 @@
 
     // ---- Banking-trip / inventory model -------------------------------
     const tripCtx = {
-      m, ttk, cycle, kph,
+      m, ttk: ttkEff, cycle, kph, cannonOn: !!cannon,
       dba, combatType: input.combatType, prayerDef: prayer.def, boostKeys,
       dbaRestore: input.trip ? input.trip.dbaRestore : undefined,
       hasSpec: !!specInfo,   // a 2nd (spec) weapon is actually in use → reserve a slot
       prayerPerKill, prayerLevel,
+      ringRecoil, recoilDmgPerKill,   // ring of recoil: charge use + spare-ring slots
     };
     let trip = window.TripModel
       ? window.TripModel.computeTrip(input, { ...tripCtx, lootBreakdown }) : null;
@@ -1042,7 +1215,7 @@
       ammoKeyUsed = (w && w.sub === 'thrown' && w.ammoKey) ? w.ammoKey : input.ammo;
       if (ammoKeyUsed && ARROWS[ammoKeyUsed]){
         // shots per kill = attacks landed over the kill time
-        const shotsPerKill = speedSec > 0 ? ttk / speedSec : 0;
+        const shotsPerKill = speedSec > 0 ? playerKillTime / speedSec : 0;
         const recover = !(input.trip && input.trip.recoverAmmo === false);
         const frac = recover ? AMMO_DESTROY_FRAC : 1;
         ammoUnitPrice = ammoPrice(ammoKeyUsed);
@@ -1058,13 +1231,17 @@
       runeCostPerCast = spellRuneCost(input.spell, input.weapon);
       const spObj = SPELLS[input.spell];
       if (spObj?.god && input.charge !== false) chargePerCast = chargeCostPerCast(speedSec);
-      castsPerKill = speedSec > 0 ? ttk / speedSec : 0;
+      castsPerKill = speedSec > 0 ? playerKillTime / speedSec : 0;
       runeCostPerKill = castsPerKill * (runeCostPerCast + chargePerCast);
     }
     const foodCostPerKill = trip
       ? trip.foodCostPerKill
       : (input.foodPerKill || 0) * (input.foodPrice || 0);
-    const supplyCostPerKill = foodCostPerKill + potionCostPerKill + ammoCostPerKill + runeCostPerKill;
+    // Ring of recoil: shattered rings (40 charges each) are a per-kill supply.
+    const recoilCostPerKill = trip ? (trip.recoilCostPerKill || 0) : 0;
+    // Cannonballs are a (large) per-kill supply when the cannon is running.
+    const ballCostPerKill = cannon ? cannon.ballCostPerKill : 0;
+    const supplyCostPerKill = foodCostPerKill + potionCostPerKill + ammoCostPerKill + runeCostPerKill + recoilCostPerKill + ballCostPerKill;
     const netGph = gph - supplyCostPerKill * kph;
 
     // Effective rates fold in banking downtime (efficiency = killing ÷ trip)
@@ -1089,9 +1266,13 @@
     const ALCH_XP_PER_CAST = 65;
     const alchXpPerKill = alchCastsPerKill * ALCH_XP_PER_CAST;
     if (alchXpPerKill > 0) skillXpPerKill.alch = (skillXpPerKill.alch || 0) + alchXpPerKill;
+    // Cannon damage gives 2 Ranged xp/dmg (no HP xp), shown as its own row so
+    // it's clear how much of your Ranged xp comes from the cannon vs your bow.
+    if (cannon && cannon.rangedXpPerHour > 0 && kph > 0)
+      skillXpPerKill.rngcannon = (skillXpPerKill.rngcannon || 0) + cannon.rangedXpPerHour / kph;
     const SKILL_NAMES = { att:'Attack', str:'Strength', def:'Defence',
-      rng:'Ranged', mag:'Magic', hp:'Hitpoints', prayer:'Prayer', alch:'Magic (alch)' };
-    const SKILL_ORDER = ['att','str','def','rng','mag','alch','hp','prayer'];
+      rng:'Ranged', rngcannon:'Ranged (cannon)', mag:'Magic', hp:'Hitpoints', prayer:'Prayer', alch:'Magic (alch)' };
+    const SKILL_ORDER = ['att','str','def','rng','rngcannon','mag','alch','hp','prayer'];
     const skillXpPerHour = {};
     let totalXpPerHour = 0;
     for (const k of Object.keys(skillXpPerKill)){
@@ -1103,15 +1284,29 @@
       .filter(k => skillXpPerHour[k] > 0)
       .map(k => ({ key:k, name:SKILL_NAMES[k] || k, xpPerHour: skillXpPerHour[k] }));
 
+    // Cannonballs to bring for one trip (handy for slayer / supply planning).
+    if (cannon && trip){
+      const ktrip = isFinite(trip.killsPerTrip) ? trip.killsPerTrip : 0;
+      cannon.ballsPerTrip = cannon.ballsPerKill * ktrip;
+      cannon.ballCostPerTrip = cannon.ballCostPerKill * ktrip;
+    }
+
     return {
       combatType: input.combatType,
       effAcc, effDmg, maxHit: mh,
       attRoll, defRoll: monDefRoll, hitChance: hc, avgHit,
       attackSpeedSec: speedSec, attackTicks: ticks,
-      dps, effDps, specInfo, ttkSec: ttk, cycleSec: cycle, overheadSec: overhead, killsPerHour: kph,
+      dps, effDps, specInfo, ttkSec: ttkEff, cycleSec: cycle, overheadSec: overhead, killsPerHour: kph,
       // Weapon poison (null when no poisoned weapon): per-hit damage + interval +
       // its contribution to kill DPS, and the share of the kill done by real hits.
       poison: poisonSev > 0 ? { severity:poisonSev, hit:poisonHit, intervalSec:30*TICK_SECONDS, dps:poisonDps, directFrac } : null,
+      // Ring of recoil (null unless equipped & dealing reflect dmg): per-hit
+      // reflect, its DPS contribution, reflect dmg per kill, and ring use.
+      recoil: (ringRecoil && recoilDps > 0) ? { perHit:recoilPerHit, dps:recoilDps,
+        dmgPerKill:recoilDmgPerKill, directFrac,
+        ringsPerKill: trip ? (trip.recoilRingsPerKill || 0) : 0,
+        rings: trip ? (trip.recoilRings || 1) : 1,
+        costPerKill: recoilCostPerKill } : null,
       // XP — primary metric is combat skill only (not HP)
       xpPerKill: combatXpPerKill,
       xpPerHour: combatXph,
@@ -1121,11 +1316,13 @@
       gpPerKill, gpPerHour: gph, netGpPerHour: netGph,
       prayerXpPerKill, prayerXpPerHour,
       supplyCostPerKill, foodCostPerKill, potionCostPerKill, ammoCostPerKill,
-      runeCostPerKill, runeCostPerCast, chargePerCast, castsPerKill,
+      runeCostPerKill, runeCostPerCast, chargePerCast, castsPerKill, recoilCostPerKill,
       ammoPerKill, ammoKeyUsed, ammoUnitPrice, lootBreakdown,
       dbaInfo,
       // trip model
       trip,
+      cannon,
+      scarce,
       tripEfficiency: eff,
       effectiveKph,
       effectiveXpPerHour, effectiveGpPerHour, effectiveNetGpPerHour,

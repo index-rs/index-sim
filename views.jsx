@@ -261,7 +261,7 @@ function GearSlotPicker({ items, value, onChange, ct, disabled, hiddenTiers }){
     .map(([k, v]) => ({
       key: k,
       label: (v.name || k) + (v.approx && k!=='none' ? ' ~' : ''),
-      hint: k!=='none' ? bonusBits(v) : '',
+      hint: k!=='none' ? (bonusBits(v) || v.note || '') : '',
     }));
   return <SearchSelect options={options} value={value} onChange={onChange}
     disabled={disabled} placeholder="Type to search gear…" />;
@@ -277,7 +277,11 @@ function makeDefaults(combatType = 'melee', monsterId){
     foodPerKill: 0, foodPrice: 0,
     potionPerKill: 0, potionPrice: 0,
     ammoPerKill: 0, ammoPrice: 0,
-    ringOfWealth: false,
+    // Ring of wealth is best-in-slot: a free gem-table upgrade with no combat
+    // downside, so it's the default equipped ring. Ring of recoil is situational
+    // (faster kills with no XP, shatters) — pick it only when it actually helps.
+    ringOfWealth: true,
+    gear: { ring: 'ring_of_wealth' },
     specWeapon: 'none',   // 2nd weapon brought only to special-attack on cooldown
     sustained: false,
     repotThreshold: null,   // null = auto (peak - 10)
@@ -302,8 +306,12 @@ function makeDefaults(combatType = 'melee', monsterId){
       bankSeconds: null,
       foodKey: 'lobster', foodCount: null,
       potionSets: 1, potionDoses: 4, singleDose: false, dbaRestore: true, alching: false, runeSlots: 2,
-      teleport: true, protect: 'none', safespot: null, recoverAmmo: true, antifire: false,
-      foodPerKillOverride: null,
+      teleport: true, protect: 'none', safespot: null, recoverAmmo: true, antifire: false, antipoison: false,
+      foodPerKillOverride: null, recoilRings: 1,
+      // scarce-spot / AFK throttle: enabled=false ⇒ monsters never run out
+      // (legacy). targets = how many you fight at once; respawnSec = null → use
+      // the monster's respawn. Cannon reach is the per-monster cannon's targets.
+      scarce: { enabled: false, targets: 2, respawnSec: null },
     },
   };
   if (combatType === 'melee'){
@@ -710,6 +718,7 @@ function EquipmentOverview({input}){
         <OverviewRow k="Potions" v={boostSummary(input)} />
         {input.sustained && <OverviewRow k="Sustained" v="avg over session" accent="amber" />}
         {input.ringOfWealth && <OverviewRow k="Ring" v="Ring of wealth" accent="teal" />}
+        {input.gear?.ring === 'ring_of_recoil' && <OverviewRow k="Ring" v={`Recoil ×${input.trip?.recoilRings ?? 1}`} accent="teal" />}
       </div>
     </>
   );
@@ -811,6 +820,12 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
     // second pass is cheap insurance against any tie/interaction.
     for (let pass = 0; pass < 2; pass++){
       for (const slot of ARMOUR_SLOTS){
+        // The ring slot carries no offensive stats; ring of recoil only "wins"
+        // on TTK because its reflect damage shortens the kill — but it's
+        // situational (no XP, shatters, costs gp, members-only). True best-in-slot
+        // is the ring of wealth (free gem-table upgrade, no downside). Force it;
+        // the user swaps to recoil by hand when it actually helps.
+        if (slot.key === 'ring'){ g = { ...g, ring: 'ring_of_wealth' }; continue; }
         // Score every candidate by TTK, then choose: among items within a
         // small relative tolerance of the best TTK (a DPS wash), prefer the one
         // carrying the most strength bonus — it scales better with levels and
@@ -832,6 +847,7 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
       }
     }
     set('gear', g);
+    set('ringOfWealth', g.ring === 'ring_of_wealth');
     recompute(g, input.weapon, input.ammo);
   };
 
@@ -1150,6 +1166,22 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
               Ultra-rare table unaffected.
             </div>
           </div>
+
+          {input.gear?.ring === 'ring_of_recoil' && (
+            <div>
+              <div className="label-cap" style={{marginBottom:8}}>Ring of recoil</div>
+              <NumField label="Rings taken (incl. equipped)"
+                v={input.trip?.recoilRings ?? 1}
+                onChange={v=>set('trip', {...(input.trip||{}), recoilRings: Math.max(1, v)})} />
+              <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', marginTop:6, lineHeight:1.5}}>
+                Reflects floor(dmg/10)+1 back per hit taken — kills faster but
+                gives no XP. Each ring shatters after 40 reflected dmg; the 1st is
+                equipped, spares take {Math.max(0,(input.trip?.recoilRings ?? 1)-1)} inv slot{((input.trip?.recoilRings ?? 1)-1)===1?'':'s'}.
+                Assuming all your rings are full. No recoil while safespotted, and
+                members areas only.
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1200,7 +1232,7 @@ function StatsPane({input, result}){
       {result.trip && (
         <>
           <div className="h-strip"><span className="title">Banking trip</span>
-            <span className="meta">{result.trip.bound==='food'?'food-bound':result.trip.bound==='loot'?'inventory-bound':result.trip.bound==='prayer'?'prayer-bound':'no banking'} · bank {fmtTime(result.trip.bankSeconds)}</span>
+            <span className="meta">{result.trip.bound==='food'?'food-bound':result.trip.bound==='loot'?'inventory-bound':result.trip.bound==='prayer'?'prayer-bound':result.trip.bound==='recoil'?'recoil-bound':'no banking'} · bank {fmtTime(result.trip.bankSeconds)}</span>
           </div>
           <div style={{padding:'10px 14px', display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10}}>
             <MiniMetric k="Kills / trip" v={isFinite(result.trip.killsPerTrip)?fmtInt(result.trip.killsPerTrip):'∞'} />
@@ -1211,6 +1243,9 @@ function StatsPane({input, result}){
             <MiniMetric k="Loot slots/kill" v={result.trip.slots.nonStackPerKill.toFixed(2)} />
             <MiniMetric k="Incoming/kill"  v={`${result.trip.incoming.hpPerKill.toFixed(1)} hp`} />
             <MiniMetric k="Supplies/hr"  v={fmtK(result.supplyCostPerKill*result.effectiveKph)} />
+            {result.recoil && (
+              <MiniMetric k="Recoil/kill" v={`${result.recoil.dmgPerKill.toFixed(1)} dmg · ${result.recoil.ringsPerKill.toFixed(2)} ring`} />
+            )}
           </div>
         </>
       )}
@@ -1269,9 +1304,10 @@ function ComparePane({input, set}){
       const sim = ov
         ? {...input, ...ov, monster:m}
         : {...input, ...baseSetup, monster:m,
-           trip:{...((baseSetup.trip)||input.trip||{}), bankSeconds:null, foodCount:null, foodPerKillOverride:null}};
+           trip:{...((baseSetup.trip)||input.trip||{}), bankSeconds:null, foodCount:null, foodPerKillOverride:null, scarce:null}};
       sim.trip = {...(sim.trip||{}), alching:alchOn};
       sim.overheadSec = (input.overheadByMonster||{})[m.id] ?? null;  // per-monster (null → engine default)
+      sim.cannon = null;  // compare rows are solo — cannon is a per-spot Stats-tab overlay
       return {m, r:E.simulate(sim), custom:!!ov};
     });
   }, [input]);
@@ -1858,12 +1894,23 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
 // =======================================================================
 // TRIP PANE — banking trip / inventory model controls
 // =======================================================================
-function TripPane({input, result, setTrip}){
+function TripPane({input, result, setTrip, setCannon}){
   const t = input.trip || {};
   const TM = window.TripModel;
   const FOOD = TM ? TM.FOOD : {};
   const trip = result.trip;
   const ct = input.combatType;
+  const m = input.monster;
+  // scarce-spot / AFK throttle state. sc = input settings; scRes = engine output.
+  const sc = t.scarce || {};
+  const scOn = !!sc.enabled;
+  const scTargets = sc.targets ?? 2;
+  const scRes = result.scarce;
+  const respawnDef = (m && m.respawn) || 60;
+  // The cannon's reach is the SAME per-monster cannon used by the Cannon tab —
+  // one source of truth, surfaced here so it can be toggled inside scarce mode.
+  const c0 = (input.cannonByMonster||{})[m?.id] || {};
+  const cannonEnabled = !!c0.enabled;
   const protOpts = [['none','None'],['melee','Protect Melee'],['missiles','Protect Missiles'],['magic','Protect Magic']];
 
   const cell = { padding:'8px 10px', background:'var(--bg-1)', border:'1px solid var(--border-1)', borderRadius:3 };
@@ -1919,6 +1966,21 @@ function TripPane({input, result, setTrip}){
     if (kpt == null) return null;
     const killMin = (result.cycleSec || 0) * kpt / 60;
     const doses = Math.max(1, Math.ceil(killMin / ANTIFIRE_MIN));
+    return { doses, killMin, vials: Math.ceil(doses/4) };
+  })();
+
+  // ---- super-antipoison dose recommendation ---------------------------
+  // One super-antipoison dose gives ~6 minutes of poison immunity (2004
+  // mechanic). Doses needed = ⌈active fighting minutes / 6⌉. Skipped at
+  // monsters that drop their own antipoison (you sustain it for free).
+  const ANTIPOISON_MIN = 6;
+  const antipoisonRec = (() => {
+    const mo = input.monster;
+    if (!t.antipoison || !trip || !(mo && mo.poisons) || mo.antipoisonFromDrops) return null;
+    const kpt = isFinite(trip.killsPerTrip) ? trip.killsPerTrip : null;
+    if (kpt == null) return null;
+    const killMin = (result.cycleSec || 0) * kpt / 60;
+    const doses = Math.max(1, Math.ceil(killMin / ANTIPOISON_MIN));
     return { doses, killMin, vials: Math.ceil(doses/4) };
   })();
 
@@ -2043,6 +2105,43 @@ function TripPane({input, result, setTrip}){
               )}
             </>
           )}
+          {input.monster && input.monster.poisons && (
+            <>
+              {input.monster.antipoisonFromDrops ? (
+                <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
+                  Poisons you, but drops antipoison — you sustain immunity from
+                  its own drops, so no antipoison supply is needed (only matters
+                  when fighting in the open, not safespotting).
+                </div>
+              ) : (
+                <>
+                  <Toggle label="Super antipoison" subOn="immune to poison" subOff="taking poison damage" color="teal"
+                          value={!!t.antipoison} onChange={v=>setTrip({antipoison:v})} />
+                  {trip && !trip.incoming.safespot && (
+                    <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)'}}>
+                      Poison chip: {t.antipoison ? '0 hp/kill (immune)' : `${input.monster.poisonMax ?? 5} hp/kill`}
+                      {' '}— a DoT that protection prayers don't block; super-antipoison negates it.
+                    </div>
+                  )}
+                  {trip && trip.incoming.safespot && (
+                    <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)'}}>
+                      Safespotted — no poison taken, antipoison not needed.
+                    </div>
+                  )}
+                  {antipoisonRec && (
+                    <div style={{padding:'6px 8px', borderRadius:3,
+                      border:'1px solid color-mix(in oklab, var(--teal) 30%, var(--border-2))',
+                      background:'color-mix(in oklab, var(--teal) 8%, var(--bg-1))',
+                      fontFamily:'var(--mono)', fontSize:10, color:'var(--text-2)', lineHeight:1.5}}>
+                      <span style={{color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.5px'}}>Antipoison</span>{' '}
+                      bring <span style={{color:'var(--text-1)'}}>{antipoisonRec.doses} dose{antipoisonRec.doses===1?'':'s'}</span>
+                      {' '}({antipoisonRec.vials} × (4)-vial) — {antipoisonRec.killMin.toFixed(0)}min trip, 6min/dose.
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
         <div style={{display:'flex', flexDirection:'column', gap:10}}>
           <div className="label-cap">Inventory reserve</div>
@@ -2059,6 +2158,70 @@ function TripPane({input, result, setTrip}){
                     value={t.dbaRestore!==false} onChange={v=>setTrip({dbaRestore:v})} />
           )}
           {ct==='magic' && <NumField label="Combat rune slots" v={t.runeSlots??2} onChange={v=>setTrip({runeSlots:Math.max(0,v)})} />}
+        </div>
+      </div>
+
+      {/* ---- Scarce spot / AFK throttle ----------------------------------
+          Default OFF = monsters never run out. ON = you only fight a few
+          spawns, so kills/hr is capped by ttk + respawn. Cannon can be added
+          and may reach more targets than you do in melee. */}
+      <div className="h-strip"><span className="title">Scarce spot / AFK</span>
+        <span className="meta">cap kills by how fast a few targets respawn</span>
+      </div>
+      <div style={{padding:'14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:14}}>
+        <div style={{display:'flex', flexDirection:'column', gap:10}}>
+          <Toggle label="Limited targets" color="amber"
+            subOn={`only ${scTargets} mob${scTargets===1?'':'s'} reachable — wait for respawns`}
+            subOff="monsters never run out (default)"
+            value={scOn} onChange={v=>setTrip({scarce:{...sc, enabled:v, targets:scTargets}})} />
+          {scOn && (
+            <>
+              <NumField label="Targets you fight (melee / range / mage)" v={scTargets} step={1}
+                onChange={v=>setTrip({scarce:{...sc, enabled:true, targets:Math.max(1,Math.min(50,Math.round(v)))}})} />
+              <div className="field">
+                <label>Respawn / mob (sec){m && m.respawnVerified?' \u2713':''}</label>
+                <input className="input" type="number" min="1"
+                  placeholder={`default ${respawnDef}`}
+                  value={sc.respawnSec ?? ''}
+                  onChange={e=>setTrip({scarce:{...sc, enabled:true, respawnSec: e.target.value===''?null:Math.max(1,+e.target.value)}})} />
+              </div>
+            </>
+          )}
+        </div>
+        <div style={{display:'flex', flexDirection:'column', gap:10}}>
+          {scOn ? (
+            <>
+              <Toggle label="Cannon at this spot" color="teal"
+                subOn="adds parallel fire over its own reach" subOff="no cannon — your hits only"
+                value={cannonEnabled}
+                onChange={v=>setCannon({enabled:v, ...(v && c0.targets==null ? {targets:Math.max(1,Math.min(8,scTargets))} : {})})} />
+              {cannonEnabled && (
+                <NumField label="Cannon reaches (targets, max 8)" v={c0.targets ?? 3} step={1}
+                  onChange={v=>setCannon({targets:Math.max(1,Math.min(8,Math.round(v)))})} />
+              )}
+              {scRes && (
+                <div style={{padding:'8px 10px', borderRadius:3,
+                  border:'1px solid color-mix(in oklab, var(--amber) 30%, var(--border-2))',
+                  background:'color-mix(in oklab, var(--amber) 8%, var(--bg-1))',
+                  fontFamily:'var(--mono)', fontSize:10, color:'var(--text-2)', lineHeight:1.6}}>
+                  <span style={{color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.5px'}}>Throttle</span>{' '}
+                  solo {fmtInt(scRes.kphSolo)}/hr → <span style={{color:'var(--text-1)'}}>{fmtInt(scRes.kph)}/hr</span>
+                  {scRes.respawnBound
+                    ? ` — respawn-bound, idle ${fmtPct(1-scRes.activeFrac)} of the time`
+                    : ' — not respawn-bound (a target is always up)'}
+                  {cannonEnabled && <>{' · '}cannon reaches {c0.targets ?? 3}, you reach {scTargets}.</>}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.6}}>
+              Turn this on for AFK / scarce spots (rock crabs, moss giants, a small
+              cluster of mobs) where you can only reach a couple of monsters and
+              must wait for them to respawn. Off = the default assumption that a
+              fresh target is always available, so kills/hr is limited only by
+              your kill speed and banking.
+            </div>
+          )}
         </div>
       </div>
 
@@ -2137,6 +2300,168 @@ function TripPane({input, result, setTrip}){
 }
 
 // =======================================================================
+// CANNON PANE — Dwarf multicannon overlay on the current monster
+// Models the cannon as a second attacker that borrows YOUR equipped-weapon
+// hit roll for accuracy (the quirk), deals a flat 0–30 (avg 15), gives 2
+// Ranged xp/dmg, and fires into however many targets stand in the spot — an
+// occupancy that's throttled by how fast the combined damage clears them.
+// =======================================================================
+function CannonPane({input, simInput, result, setCannon}){
+  const m = input.monster;
+  const c0 = (input.cannonByMonster||{})[m.id] || {};
+  const enabled = !!c0.enabled;
+  const targets = c0.targets ?? 3;
+  const respawnDef = m.respawn ?? 60;
+  const c = result.cannon;                 // engine output (only when enabled & killDps>0)
+  const ct = input.combatType;
+  const ballPrice = (window.GameData?.ITEM_PRICES?.mcannonball) ?? 180;
+
+  const cell = { padding:'8px 10px', background:'var(--bg-1)', border:'1px solid var(--border-1)', borderRadius:3 };
+  const rollLabel = ct==='ranged' ? 'your Ranged attack roll'
+    : ct==='magic' ? 'your Magic attack roll'
+    : 'your melee weapon\u2019s attack roll';
+  const defLabel = ct==='ranged' ? 'Ranged defence'
+    : ct==='magic' ? 'Magic defence' : 'melee defence';
+
+  return (
+    <div style={{flex:1, overflowY:'auto'}}>
+      <div className="h-strip">
+        <span className="title">Dwarf multicannon</span>
+        <span className="meta">
+          <span style={{color:'var(--gold)'}}>cannonball {fmtInt(ballPrice)} gp</span>
+          <span style={{color:'var(--text-3)'}}>{' · '}</span>
+          <span style={{color: enabled ? 'var(--violet)' : 'var(--text-3)'}}>
+            {enabled ? (c && !c.idle ? `${fmtK(c.ballsPerHour)} balls/hr` : 'idle — spot too sparse') : 'off'}
+          </span>
+        </span>
+      </div>
+
+      <div style={{padding:'12px 14px', display:'grid', gap:14}}>
+        {/* ---- enable + spot inputs ---- */}
+        <div style={{display:'grid', gridTemplateColumns:'minmax(0,1.3fr) 1fr 1fr', gap:12, alignItems:'end'}}>
+          <Toggle label="Set up cannon" color="violet"
+            subOn="4 parts + balls (5 inv slots) — fires alongside you"
+            subOff="no cannon — solo combat only"
+            value={enabled} onChange={v=>setCannon({enabled:v})} />
+          <NumField label="Targets at spot (max)" v={targets} step={1}
+            onChange={v=>setCannon({targets:Math.max(1, Math.min(8, Math.round(v)))})} />
+          <div className="field">
+            <label>Respawn / mob (sec)</label>
+            <input className="input" type="number" step="1"
+              placeholder={`default ${respawnDef}${m.respawnVerified?' \u2713':''}`}
+              value={c0.respawnSec ?? ''}
+              onChange={e=>setCannon({respawnSec: e.target.value===''?null:Math.max(1,+e.target.value)})} />
+          </div>
+        </div>
+
+        <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.6, marginTop:-4}}>
+          The cannon sweeps 8 octants, one tick (0.6s) each, firing at most one ball per
+          tick into an octant that holds a mob. <span style={{color:'var(--text-2)'}}>Max</span> is
+          the spawns the spot can hold (cap 8); the cannon rarely sees all of them at once
+          because kills outrun respawns — the <span style={{color:'var(--violet)'}}>effective</span> count
+          below is what actually gets hit.
+        </div>
+
+        {/* ---- accuracy callout (the quirk) ---- */}
+        <div style={{padding:'10px 12px', borderRadius:3,
+          border:'1px solid color-mix(in oklab, var(--violet) 45%, var(--border-2))',
+          background:'color-mix(in oklab, var(--violet) 7%, var(--bg-1))'}}>
+          <div style={{fontFamily:'var(--mono)', fontSize:10, textTransform:'uppercase', letterSpacing:'.06em',
+            color:'var(--violet)', marginBottom:4}}>How cannon accuracy works</div>
+          <div style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--text-2)', lineHeight:1.6}}>
+            A cannonball deals a flat <b style={{color:'var(--text-1)'}}>0–30</b> (avg 15) — no Ranged
+            level, gear or potion scaling. Its <b style={{color:'var(--text-1)'}}>hit chance is {rollLabel}</b>{' '}
+            (your currently-equipped weapon &amp; stance) vs this monster&rsquo;s {defLabel} — so your{' '}
+            {ct} setup on the {ct==='melee'?'Melee':ct==='ranged'?'Ranged':'Magic'} tab drives it.
+            Right now that lands <b style={{color:'var(--violet)'}}>{fmtPct(result.hitChance)}</b>, for
+            an effective <b style={{color:'var(--text-1)'}}>{fmt2(result.hitChance*15)}</b> dmg/ball.
+            Each ball is spent whether it hits or misses; cannon damage gives 2 Ranged xp and no HP xp.
+          </div>
+        </div>
+
+        {!enabled && (
+          <div style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--text-3)', padding:'4px 2px'}}>
+            Enable the cannon to fold it into kills/hr, xp/hr and gp/hr on the Stats tab.
+          </div>
+        )}
+
+        {enabled && (!c || c.idle) && (
+          <div style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--amber)', padding:'4px 2px', lineHeight:1.6}}>
+            Cannon idle — at {targets} target{targets===1?'':'s'} / {c0.respawnSec ?? respawnDef}s you
+            clear this spot solo faster than it repopulates, so nothing stands long enough for the
+            cannon to shoot. It won&rsquo;t speed you up here: pick a busier spot (more targets / faster
+            respawn) or a tougher mob. Your kills/hr is unchanged from solo.
+          </div>
+        )}
+
+        {enabled && c && !c.idle && (
+          <>
+            <div className="h-strip"><span className="title">Cannon output</span>
+              <span className="meta">{fmt1(c.effTargets)} of {c.targets} targets hit on average</span>
+            </div>
+            <div style={{padding:'4px 0', display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10}}>
+              <MiniMetric k="Effective targets" v={fmt1(c.effTargets)} />
+              <MiniMetric k="Cannon DPS" v={fmt2(c.cannonDps)} />
+              <MiniMetric k="Balls / hr" v={fmtK(c.ballsPerHour)} />
+              <MiniMetric k="Balls / kill" v={fmt2(c.ballsPerKill)} />
+              <MiniMetric k="Cannon Ranged xp/hr" v={fmtK(c.rangedXpPerHour)} />
+              <MiniMetric k="Ball cost / hr" v={`-${fmtK(c.ballCostPerHour)}`} />
+              <MiniMetric k="Ball cost / kill" v={`-${fmtInt(c.ballCostPerKill)}`} />
+              <MiniMetric k="Ball price" v={fmtInt(c.ballPrice)} />
+            </div>
+
+            <div className="h-strip"><span className="title">Kills / hr uplift</span>
+              <span className="meta" style={{color:'var(--green)'}}>
+                {c.kphNoCannon>0 ? `+${fmtPct(c.kphWithCannon/c.kphNoCannon - 1)}` : '—'} vs solo
+              </span>
+            </div>
+            <div style={{padding:'4px 0', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10}}>
+              <MiniMetric k="Solo kills/hr" v={fmtInt(c.kphNoCannon)} />
+              <MiniMetric k="With cannon" v={fmtInt(result.killsPerHour)} />
+              <MiniMetric k="Your share of dmg" v={fmtPct(c.activeFrac * c.playerDps / Math.max(1e-9, c.activeFrac * c.playerDps + c.cannonDps))} />
+            </div>
+
+            {c.respawnBound && (
+              <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--amber)', lineHeight:1.6}}>
+                Respawn-bound: at this DPS you and the cannon out-damage the spawns, so you spend
+                part of each cycle idle waiting for mobs. More targets / faster respawn would let
+                you (and the cannon) work the full time.
+              </div>
+            )}
+
+            {/* balls to bring */}
+            {result.trip && (
+              <>
+                <div className="h-strip"><span className="title">Cannonballs to bring</span>
+                  <span className="meta">stackable — 1 inv slot</span></div>
+                <div style={{padding:'4px 0', display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:10}}>
+                  <MiniMetric k="Per trip"
+                    v={c.ballsPerTrip!=null && isFinite(c.ballsPerTrip) ? fmtInt(c.ballsPerTrip) : '—'} />
+                  <MiniMetric k="Ball gp / trip"
+                    v={c.ballCostPerTrip!=null && isFinite(c.ballCostPerTrip) ? `-${fmtK(c.ballCostPerTrip)}` : '—'} />
+                </div>
+                <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.6}}>
+                  Cannon reserves 5 inventory slots (4 parts + balls), already folded into the Trip
+                  tab&rsquo;s loot capacity. Balls are charged as a supply cost in net gp/hr, so a
+                  pricey spot can swing the cannon from profit to loss — watch the ball cost/hr above.
+                </div>
+              </>
+            )}
+
+            <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.6, marginTop:2}}>
+              Respawn for {m.name}: <span style={{color:'var(--text-2)'}}>{respawnDef}s</span>{' '}
+              {m.respawnVerified
+                ? '\u2014 sourced from the npc config.'
+                : '\u2014 standard 100-tick default (not individually verified for this monster); set the exact value above if you know it.'}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =======================================================================
 // DUEL PANE — side-by-side setup comparison on the current monster
 // =======================================================================
 function DuelPane({input, set}){
@@ -2150,8 +2475,8 @@ function DuelPane({input, set}){
     const live = { name:'Live loadout', live:true, r:E.simulate(input) };
     const snaps = setups.map((d,i) => ({
       name:d.name, i,
-      r:E.simulate({...input, ...d.setup, monster:m,
-        trip:{...(d.setup.trip||{}), bankSeconds:null, foodCount:null, foodPerKillOverride:null}}),
+      r:E.simulate({...input, ...d.setup, monster:m, cannon:null,
+        trip:{...(d.setup.trip||{}), bankSeconds:null, foodCount:null, foodPerKillOverride:null, scarce:null}}),
       setup:d.setup,
     }));
     return [live, ...snaps];
@@ -2274,14 +2599,23 @@ function DuelPane({input, set}){
 function MonsterCard({input, set}){
   const m = input.monster;
   const hasCustom = !!(input.monsterSetups||{})[m.id];
-  const [monNameQ, setMonNameQ] = useState('');
   const [monLootQ, setMonLootQ] = useState('');
-  const monFiltered = !!(monNameQ || monLootQ);
-  const visMonsters = useMemo(() => E.MONSTERS.filter(x => {
-    if (monNameQ && !x.name.toLowerCase().includes(monNameQ.toLowerCase())) return false;
-    if (!matchLoot(x, monLootQ)) return false;
-    return true;
-  }), [monNameQ, monLootQ]);
+  const monFiltered = !!monLootQ;
+  // Name search now lives inside the SearchSelect combobox (type-to-filter,
+  // like the gear pickers); the loot box is a secondary filter that narrows
+  // which monsters the combobox offers.
+  const visMonsters = useMemo(() => E.MONSTERS.filter(x => matchLoot(x, monLootQ)), [monLootQ]);
+  const monOptions = useMemo(() => {
+    const opts = visMonsters.map(x => ({
+      key: x.id,
+      label: x.name + ((input.monsterSetups||{})[x.id] ? ' \u25cf' : ''),
+      hint: `lvl ${x.level} \u00b7 ${x.hp} HP`,
+    }));
+    // Keep the current target selectable even if the loot filter excludes it.
+    if (!visMonsters.find(x => x.id === m.id))
+      opts.unshift({ key:m.id, label:m.name, hint:`lvl ${m.level} \u00b7 ${m.hp} HP` });
+    return opts;
+  }, [visMonsters, input.monsterSetups, m]);
   return (
     <aside ref={useNativeWheelRef} style={{borderLeft:'1px solid var(--border-1)', background:'var(--bg-1)', overflow:'auto', overscrollBehavior:'contain'}} className="scroll">
       <div className="h-strip">
@@ -2289,33 +2623,28 @@ function MonsterCard({input, set}){
         <span className="meta">id · {m.id}</span>
       </div>
       <div style={{padding:'12px'}}>
-        <input
-          type="text"
-          placeholder="Search monster name…"
-          value={monNameQ}
-          onChange={e=>setMonNameQ(e.target.value)}
-          className="select"
-          style={{marginBottom:5}}
-        />
+        <div style={{marginBottom:5}}>
+          <SearchSelect
+            options={monOptions}
+            value={m.id}
+            onChange={id=>set('monster', E.MONSTERS.find(x=>x.id===id))}
+            placeholder="Search monster…" />
+        </div>
         <LootSearchInput value={monLootQ} onChange={setMonLootQ}
           placeholder="Filter by drop — e.g. clue, dragon bones…"
           style={{marginBottom:5}} />
-        <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:7, minHeight:16}}>
+        <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:10, minHeight:16}}>
           <span style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)'}}>
             {monFiltered ? `${visMonsters.length} / ${E.MONSTERS.length} monsters` : `${E.MONSTERS.length} monsters`}
           </span>
           {monFiltered && (
-            <button onClick={()=>{setMonNameQ(''); setMonLootQ('');}} style={{
+            <button onClick={()=>setMonLootQ('')} style={{
               marginLeft:'auto', fontFamily:'var(--mono)', fontSize:10, padding:'2px 8px', borderRadius:3,
               cursor:'pointer', border:'1px solid var(--border-2)', background:'var(--bg-2)', color:'var(--text-2)'}}>
-              reset filters
+              reset filter
             </button>
           )}
         </div>
-        <select className="select" value={m.id} onChange={e=>set('monster', E.MONSTERS.find(x=>x.id===e.target.value))} style={{marginBottom:10}}>
-          {visMonsters.map(x => <option key={x.id} value={x.id}>{x.name}{(input.monsterSetups||{})[x.id]?' ●':''} · lvl {x.level} · {x.hp} HP</option>)}
-          {!visMonsters.find(x=>x.id===m.id) && <option key={m.id} value={m.id}>{m.name} · lvl {m.level} · {m.hp} HP</option>}
-        </select>
         {/* Per-monster setup is driven from the Setup bar above the tabs. */}
         <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:10}}>
           <span style={{fontFamily:'var(--mono)', fontSize:10, textTransform:'uppercase', letterSpacing:'.5px',
@@ -2847,8 +3176,18 @@ function CombatWorkbench(){
   });
   useEffect(() => { saveInput(input); }, [input]);
 
-  const simInput = useMemo(() => ({...input, lootPrefs}), [input, lootPrefs]);
+  const simInput = useMemo(() => ({...input, lootPrefs,
+    cannon: (input.cannonByMonster||{})[input.monster?.id] }), [input, lootPrefs]);
   const result = useMemo(()=>E.simulate(simInput), [simInput]);
+  // Patch the cannon settings for the CURRENT monster (per-spot: targets &
+  // respawn vary monster to monster, so it's keyed by monster id like overhead).
+  const setCannon = (patch) => setInput(s => {
+    const id = s.monster?.id; if (!id) return s;
+    const map = {...(s.cannonByMonster||{})};
+    map[id] = {...(map[id]||{}), ...patch};
+    return {...s, cannonByMonster:map};
+  });
+
   const [tab, setTab] = useState('stats');
 
   // Equipment tabs double as combat-type switches.
@@ -2878,6 +3217,7 @@ function CombatWorkbench(){
               {k:'compare', label:'Compare', sub:`${E.MONSTERS.length} monsters`, onClick:()=>setTab('compare')},
               {k:'loot',    label:'Loot',    sub:`${fmtK(result.gpPerHour)} gp/hr`, onClick:()=>setTab('loot')},
               {k:'trip',    label:'Trip',    sub:`${result.trip&&isFinite(result.trip.killsPerTrip)?Math.floor(result.trip.killsPerTrip)+' k/trip':'—'}`, onClick:()=>setTab('trip')},
+              {k:'cannon',  label:'Cannon',  sub: (result.cannon && !result.cannon.idle) ? `${fmtK(result.cannon.ballsPerHour)} balls/hr` : ((input.cannonByMonster||{})[input.monster?.id]?.enabled ? 'idle' : 'off'), onClick:()=>setTab('cannon')},
               {k:'duel',    label:'Duel',    sub:`${(input.duelSetups||[]).length} setups`, onClick:()=>setTab('duel')},
               {k:'settings',label:'Settings',sub:(() => { const i = priceAgeInfo(); return i.hours !== null && i.hours > 24 ? `⚠ prices ${i.label}` : 'prices · import'; })(), onClick:()=>setTab('settings')},
             ].map(t => {
@@ -2888,22 +3228,20 @@ function CombatWorkbench(){
               <button key={t.k}
                 onClick={t.onClick}
                 style={{
-                  flex:'0 0 auto', padding:'10px 12px',
+                  flex:'0 0 auto', padding:'11px 12px',
                   border:0, borderRight:'1px solid var(--border-1)',
                   borderBottom: tab===t.k ? '2px solid var(--teal)' : '2px solid transparent',
                   background: activeEquip && tab!==t.k ? 'color-mix(in oklab, var(--teal) 6%, transparent)' : 'transparent',
                   cursor:'pointer',
-                  display:'flex', flexDirection:'column', alignItems:'flex-start', gap:2,
+                  display:'flex', alignItems:'center', gap:2,
                 }}>
-                <span style={{fontFamily:'var(--mono)', fontSize:11, textTransform:'uppercase', letterSpacing:'.08em',
-                  color: tab===t.k ? 'var(--teal)' : activeEquip ? 'var(--text-1)' : 'var(--text-2)'}}>
+                <span style={{fontFamily:'var(--mono)', fontSize:11, textTransform:'uppercase', letterSpacing:'.06em',
+                  color: tab===t.k ? 'var(--teal)' : activeEquip ? 'var(--text-1)' : 'var(--text-2)', whiteSpace:'nowrap'}}>
                   {t.label}{activeEquip ? ' ●' : ''}
                 </span>
-                <span style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)'}}>{t.sub}</span>
               </button>
               );
             })}
-            <div style={{flex:1, minWidth:20}} />
           </div>
 
           {tab==='stats'        && <StatsPane input={simInput} result={result}/>}
@@ -2913,7 +3251,8 @@ function CombatWorkbench(){
           {tab==='compare'      && <ComparePane input={simInput} set={set}/>}
           {tab==='duel'         && <DuelPane input={simInput} set={set}/>}
           {tab==='loot'         && <LootPane input={simInput} result={result} lootPrefs={lootPrefs} setLootPref={setLootPref} setLootPrefsBulk={setLootPrefsBulk} set={set}/>}
-          {tab==='trip'         && <TripPane input={input} result={result} setTrip={setTrip}/>}
+          {tab==='trip'         && <TripPane input={input} result={result} setTrip={setTrip} setCannon={setCannon}/>}
+          {tab==='cannon'       && <CannonPane input={input} simInput={simInput} result={result} setCannon={setCannon}/>}
           {tab==='settings'     && <SettingsPane input={simInput} hiddenTiers={hiddenTiers} setHiddenTiers={setHiddenTiers}/>}
         </main>
 
@@ -2949,9 +3288,10 @@ function CombatSpreadsheet(){
       const alchOn = !!(input.alchByMonster||{})[m.id];   // per-monster alch decision
       const sim = ov ? {...input, ...ov, monster:m}
         : {...input, ...baseSetup, monster:m,
-           trip:{...((baseSetup.trip)||input.trip||{}), bankSeconds:null, foodCount:null, foodPerKillOverride:null}};
+           trip:{...((baseSetup.trip)||input.trip||{}), bankSeconds:null, foodCount:null, foodPerKillOverride:null, scarce:null}};
       sim.trip = {...(sim.trip||{}), alching:alchOn};
       sim.overheadSec = (input.overheadByMonster||{})[m.id] ?? null;
+      sim.cannon = null;
       return {m, r:E.simulate(sim), custom:!!ov};
     });
   }, [input]);

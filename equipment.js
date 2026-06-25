@@ -153,7 +153,13 @@
   const RINGS = {
     none:             { name:'None' },
     // Ring of wealth — alch from enchanted_jewelry.obj (cost 17625). No combat stats.
-    ring_of_wealth:   { name:'Ring of wealth',     note:'gem table upgrade', alch:A(17625) },
+    ring_of_wealth:   { name:'Ring of wealth',     note:'best in slot · gem table', alch:A(17625) },
+    // Ring of recoil — reflects damage taken back at the attacker. No combat
+    // stats; the `recoil` flag is read by the engine to add no-XP reflect damage
+    // that shortens TTK (mirrors the weapon-poison model). 2004 mechanic: each
+    // hit you take reflects floor(dmg/10)+1; ring shatters after dealing 40 dmg.
+    // alch flagged approx (accessory not in readable obj configs).
+    ring_of_recoil:   { name:'Ring of recoil',     note:'situational · reflects dmg', recoil:true, alch:A(2500), approx:true },
   };
 
   // ---- slot registry --------------------------------------------------
