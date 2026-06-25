@@ -322,15 +322,18 @@
     if (recoilOn){
       recoilRings = Math.max(1, Math.floor(t.recoilRings ?? 1));
       recoilSpares = recoilRings - 1;
-      if (recoilSpares > 0){
-        reserve += recoilSpares;
-        reserveParts.push(`${recoilSpares} recoil ring${recoilSpares>1?'s':''}`);
-      }
+      // Spares are NOT permanently reserved: each ring shatters after 40
+      // reflected dmg and frees its slot, so they convert to loot space over
+      // the trip (folded into `transientSlots` below, like potion vials).
       recoilRingsPerKill = recoilDmgPerKill / 40;
       const ringPrice = (window.GameData?.ITEM_PRICES?.ring_of_recoil) ?? 1500;
       recoilCostPerKill = recoilRingsPerKill * ringPrice;
       maxKillsRecoil = recoilDmgPerKill > 0 ? (recoilRings * 40) / recoilDmgPerKill : Infinity;
     }
+
+    // Spare recoil rings shatter and free their slots over the trip, so they
+    // share the potion-vial transient treatment instead of a fixed reserve.
+    const transientSlots = potionSlots + recoilSpares;
 
     // --- incoming damage → food/kill ---
     const inc = computeIncoming(input, ctx);
@@ -411,8 +414,8 @@
     // target sits exactly where collected loot reaches the pack cap as the last
     // food is eaten, which is the net-gp optimum (more food would clip loot;
     // less would bank early with a half-full pack).
-    const startSpace = Math.max(0, Math.floor(INV - reserve - potionSlots));
-    const potRate = (isFinite(kInv) && kInv > 0) ? potionSlots / kInv : 0;
+    const startSpace = Math.max(0, Math.floor(INV - reserve - transientSlots));
+    const potRate = (isFinite(kInv) && kInv > 0) ? transientSlots / kInv : 0;
     // Loot grows faster than eating/drinking frees slots only if this is > 0.
     const netFill = nonStackPerKill - foodPerKill - potRate;
     const cycle = ctx.cycle || 0;
@@ -428,7 +431,7 @@
       const kFood = foodPerKill > 0 ? fc / foodPerKill : Infinity;
       // Honest fill constraint: loot grows only into slots free now or freed by
       // eating/drinking — nonStack·k ≤ freeAtStart + (foodPerKill + potRate)·k.
-      const freeAtStart = Math.max(0, lootCapacity - potionSlots - fc);
+      const freeAtStart = Math.max(0, lootCapacity - transientSlots - fc);
       const kFill = netFill > 0 ? freeAtStart / netFill : Infinity;
       let killsPerTrip, bound;
       if (foodPerKill > 0){

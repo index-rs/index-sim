@@ -2270,7 +2270,7 @@ function TripPane({input, result, setTrip, setCannon}){
           <div style={{padding:'0 14px 8px', fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.6}}>
             Locked all trip: {trip.slots.reserveParts.length?trip.slots.reserveParts.join(' · '):'none'}
             {' + '}{trip.slots.stackReserve.toFixed(1)} stackable = {Math.round(trip.slots.inv - trip.slots.lootCapacity)} slots.
-            {' '}Food ({trip.slots.foodCount}) & potion vials ({trip.slots.potionSlots}) convert to loot as consumed.
+            {' '}Food ({trip.slots.foodCount}) & potion vials ({trip.slots.potionSlots}){trip.recoilOn && trip.recoilSpares>0 ? ` & ${trip.recoilSpares} recoil ring${trip.recoilSpares>1?'s':''}` : ''} convert to loot as consumed.
           </div>
           {/* End-of-trip pack state — the goal: bank with a FULL pack of loot */}
           <div style={{margin:'0 14px 10px', padding:'8px 10px', borderRadius:3,
@@ -2501,8 +2501,15 @@ function DuelPane({input, set}){
 
   const rename = (i, name) => set('duelSetups', setups.map((d,j)=> j===i ? {...d, name} : d));
   const remove = (i) => set('duelSetups', setups.filter((_,j)=>j!==i));
+  // Default snapshot name: the spell (magic) or arrow (ranged) being compared,
+  // else the weapon. Still editable via the row's name field.
+  const defaultSnapName = (s) => {
+    if (s.combatType === 'magic' && s.spell && E.SPELLS[s.spell]) return E.SPELLS[s.spell].name;
+    if (s.combatType === 'ranged' && s.ammo && E.ARROWS[s.ammo]) return E.ARROWS[s.ammo].name;
+    return s.weaponName || `Setup ${setups.length+1}`;
+  };
   const snapshot = () => set('duelSetups', [...setups,
-    { name:`${input.weaponName || 'Setup'} ${setups.length+1}`, setup:pickSetup(input) }]);
+    { name:defaultSnapName(input), setup:pickSetup(input) }]);
 
   const loadoutLabel = (s) => {
     const bits = [s.combatType, s.weaponName].filter(Boolean);
@@ -2537,16 +2544,16 @@ function DuelPane({input, set}){
         <table className="table" style={{width:'100%', fontSize:11}}>
           <thead>
             <tr>
-              <th style={{whiteSpace:'nowrap'}}>Setup</th>
-              <th style={{whiteSpace:'nowrap'}}>Loadout</th>
-              <th className="right">Max</th>
-              <th className="right">DPS</th>
-              <th className="right">Hit %</th>
-              <th className="right">K/trip</th>
-              <th className="right" style={{whiteSpace:'nowrap'}}>XP/hr</th>
-              <th className="right" style={{whiteSpace:'nowrap'}}>Net GP/hr</th>
-              <th className="right" style={{whiteSpace:'nowrap'}}>GP/XP</th>
-              <th className="right" style={{whiteSpace:'nowrap'}}>Supp/hr</th>
+              <th style={{whiteSpace:'nowrap', textAlign:'left'}}>Setup</th>
+              <th style={{whiteSpace:'nowrap', textAlign:'left'}}>Loadout</th>
+              <th style={{textAlign:'left'}}>Max</th>
+              <th style={{textAlign:'left'}}>DPS</th>
+              <th style={{textAlign:'left'}}>Hit %</th>
+              <th style={{textAlign:'left'}}>K/trip</th>
+              <th style={{whiteSpace:'nowrap', textAlign:'left'}}>XP/hr</th>
+              <th style={{whiteSpace:'nowrap', textAlign:'left'}}>Net GP/hr</th>
+              <th style={{whiteSpace:'nowrap', textAlign:'left'}}>GP/XP</th>
+              <th style={{whiteSpace:'nowrap', textAlign:'left'}}>Supp/hr</th>
               <th></th>
             </tr>
           </thead>
