@@ -23,6 +23,16 @@ const fmtTime = s => {
   const m = Math.floor(s/60), r = s - m*60;
   return `${m}m ${r.toFixed(0)}s`;
 };
+// Net gp earned (or spent, if negative) per point of combat xp. Small-magnitude
+// signed number — the tradeoff metric for expensive spells/ammo: more xp/hr but
+// a worse (often negative) gp/xp. '+' on profit so the sign reads at a glance.
+const fmtGpXp = n => {
+  if (n == null || !isFinite(n)) return '—';
+  const a = Math.abs(n);
+  const s = a >= 100 ? Math.round(n).toLocaleString() : a >= 10 ? n.toFixed(1) : n.toFixed(2);
+  return (n > 0 ? '+' : '') + s;
+};
+const gpPerXp = r => (r && r.effectiveXpPerHour > 0) ? r.effectiveNetGpPerHour / r.effectiveXpPerHour : null;
 
 // useNativeWheelRef — ref callback that attaches a native wheel listener
 // (capture phase) so it fires BEFORE design-canvas's bubble-phase zoom
@@ -208,6 +218,9 @@ function SearchSelect({ options, value, onChange, disabled, placeholder='Type to
         disabled={disabled}
         onChange={e=>{ setQuery(e.target.value); setOpen(true); }}
         onFocus={e=>{ setOpen(true); setQuery(''); e.target.select(); }}
+        // Selecting an option keeps focus on the input (mousedown preventDefault),
+        // so a second click fires no onFocus — reopen the list on click too.
+        onClick={e=>{ if (!open){ setOpen(true); setQuery(''); e.target.select(); } }}
         onBlur={()=>setTimeout(()=>{ setOpen(false); setQuery(''); }, 160)}
         style={{width:'100%', boxSizing:'border-box', cursor: open?'text':'pointer',
           opacity: disabled?0.5:1}}
@@ -1208,7 +1221,7 @@ function StatsPane({input, result}){
         <div className="metric big gold">
           <div className="k">GP / hour (net, effective)</div>
           <div className="v">{fmtK(result.effectiveNetGpPerHour)}</div>
-          <div className="sub">gross {fmtK(result.effectiveGpPerHour)} − supplies {fmtK(result.supplyCostPerKill*result.effectiveKph)}</div>
+          <div className="sub">gross {fmtK(result.effectiveGpPerHour)} − supplies {fmtK(result.supplyCostPerKill*result.effectiveKph)} · {fmtGpXp(gpPerXp(result))} gp/xp</div>
         </div>
         <div className="metric big green">
           <div className="k">Hit chance</div>
@@ -2484,6 +2497,7 @@ function DuelPane({input, set}){
 
   const best = (key) => Math.max(...rows.map(x => x.r[key] || 0));
   const bestXp = best('effectiveXpPerHour'), bestGp = best('effectiveNetGpPerHour');
+  const bestGpXp = Math.max(...rows.map(x => { const g = gpPerXp(x.r); return g == null ? -Infinity : g; }));
 
   const rename = (i, name) => set('duelSetups', setups.map((d,j)=> j===i ? {...d, name} : d));
   const remove = (i) => set('duelSetups', setups.filter((_,j)=>j!==i));
@@ -2531,6 +2545,7 @@ function DuelPane({input, set}){
               <th className="right">K/trip</th>
               <th className="right">Eff XP/hr</th>
               <th className="right">Eff net GP/hr</th>
+              <th className="right">GP / XP</th>
               <th className="right">Supplies/hr</th>
               <th></th>
             </tr>
@@ -2540,6 +2555,8 @@ function DuelPane({input, set}){
               const r = row.r;
               const isBestXp = r.effectiveXpPerHour >= bestXp - 0.5 && rows.length > 1;
               const isBestGp = r.effectiveNetGpPerHour >= bestGp - 0.5 && rows.length > 1;
+              const gpXp = gpPerXp(r);
+              const isBestGpXp = gpXp != null && isFinite(bestGpXp) && gpXp >= bestGpXp - 1e-6 && rows.length > 1;
               const src = row.live ? input : row.setup;
               return (
                 <tr key={row.live ? '__live' : row.i}
@@ -2560,6 +2577,8 @@ function DuelPane({input, set}){
                     {fmtK(r.effectiveXpPerHour)}{isBestXp ? ' ★' : ''}</td>
                   <td className="right num" style={{color: isBestGp ? 'var(--gold)' : undefined, fontWeight: isBestGp ? 600 : 400}}>
                     {fmtK(r.effectiveNetGpPerHour)}{isBestGp ? ' ★' : ''}</td>
+                  <td className="right num" style={{color: isBestGpXp ? 'var(--green)' : (gpXp != null && gpXp < 0 ? 'var(--text-3)' : undefined), fontWeight: isBestGpXp ? 600 : 400}}>
+                    {fmtGpXp(gpXp)}{isBestGpXp ? ' ★' : ''}</td>
                   <td className="right num">{fmtK(r.supplyCostPerKill * r.effectiveKph)}</td>
                   <td style={{whiteSpace:'nowrap', textAlign:'right'}}>
                     {!row.live && <>
