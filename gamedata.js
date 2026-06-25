@@ -28,6 +28,9 @@ const P = {
   bronze_arrow:2, iron_arrow:3, steel_arrow:18, mithril_arrow:40, rune_arrow:165,
   adamant_arrow:60, bolt:4, bronze_javelin:5, iron_javelin:8, steel_javelin:30,
   adamant_dart_p:65, rune_knife:180,
+  // Dwarf multicannon ammo (steel cannonball). Scraped live from
+  // markets.lostcity.rs/items/mcannonball; this is just the fallback.
+  mcannonball:180,
   // food
   tuna:60, lobster:185, bass:520, swordfish:220, shark:740, jug_wine:1, beer:2,
   // hides
@@ -62,7 +65,7 @@ const P = {
   goblin_armour:5, chefs_hat:50, grapes:10, spinach_roll:2, cabbage:5,
   bronze_sq_shield:12, bronze_axe:5, bronze_scimitar:18,
   iron_scimitar:55, iron_longsword:22, steel_sword:80, bronze_longsword:5,
-  '3dose1defense':350, '2dose1strength':280, '1dose2defense':180, '3doseantipoison':380,
+  '3dose1defense':350, '2dose1strength':280, '1dose2defense':180, '3doseantipoison':380, super_antipoison:760,
   cow_hide:125, raw_beef:5, raw_chicken:5, feather:3,
   // druid items
   druidrobetop:420, druidrobebottom:420, vial_water:20, vial_empty:5,
@@ -610,6 +613,7 @@ const MONSTERS = [
   // Chances use the /138 denominator (w(weight,138)).
   { id:'tribesman', name:'Tribesman', level:32, hp:30, attack:28, strength:28, defLevel:24, magicLevel:1,
     defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:8, strBonus:5, attackSpeed:4,
+    poisons:true, poisonMax:5, antipoisonFromDrops:true,
     loot:[
       always('Bones',1,'bones'),
       d('Bronze spear',7,1,'bronze_spear'),
@@ -1163,6 +1167,22 @@ const MONSTERS = [
       d('Copper ore ×3',2,3,'copper_ore'),
     ] },
 
+  // ---- Spiders (XP-only training targets; drop NOTHING) ----------------
+  // Stats from the 2004-era / OSRS NPC configs (low-level spiders are unchanged
+  // since 2004). HP drives XP (4×hp); att/str set incoming damage, def + bonuses
+  // set your TTK. All are aggressive melee with no def bonuses. Loot is empty by
+  // design — they're killed purely for combat xp. maxHit left to the str formula
+  // except where the in-game cap is lower (poison spider). They poison the player
+  // in-game, but monster→player poison isn't modelled here (safespot or out-heal).
+  { id:'deadly_red_spider', name:'Deadly red spider', level:34, hp:20, attack:34, strength:34, defLevel:28, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+    loot:[] },
+
+  { id:'jungle_spider', name:'Jungle spider', level:44, hp:28, attack:44, strength:44, defLevel:38, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+    loot:[] },
+
+  { id:'poison_spider', name:'Poison spider', level:64, hp:25, attack:54, strength:54, defLevel:52, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, maxHit:5, poisons:true, poisonMax:6,
+    loot:[] },
+
   // Baby blue dragon — EXACT from all.npc @rev225 (babybluedragon): vislvl 48,
   // hp 50, att/str/def 40; def bonuses stab30/slash50/crush50/range30/magic40.
   // death_drop=babydragon_bones (guaranteed dragon bones, no other table) — killed
@@ -1331,6 +1351,88 @@ for (const m of MONSTERS) {
 }
 
 // =====================================================================
+// RESPAWN TIMES (seconds) — npc config `respawnrate` (game ticks) × 0.6.
+//
+// Sourced from 2004Scape/Server@main: the consolidated `_unpack/all.npc`
+// dump (the overworld/dungeon monsters) plus the per-area / quest configs for
+// the rest (falador.npc, alkharid.npc, taverly.npc, yanille.npc, legends_guild.npc).
+// Where two config variants share a display name, the entry is matched by HP.
+//
+// The monsters in `MONSTER_RESPAWN` carry an EXPLICIT, verified `respawnrate`.
+// The ones listed under "NO EXPLICIT VALUE" below appear in the configs WITHOUT
+// a respawnrate field (so in-game they inherit the server's default), and a few
+// (dagannoth, troll general, rock crab, ghoul, elf warriors) come from quests
+// that don't exist in Server@main at all — those are NOT guessed, they fall back
+// to RESPAWN_DEFAULT and are flagged `respawnVerified=false`. Every spot's
+// respawn is still editable in the Cannon tab (input.cannon.respawnSec overrides
+// this), so you can drop in an exact value for any monster you cannon.
+// =====================================================================
+const RESPAWN_DEFAULT = 60;        // 100 ticks — the standard/inherited default
+const MONSTER_RESPAWN = {
+  // id                  secs  (ticks)  config block @ 2004Scape/Server@main
+  chicken:               30,  //  50t  all.npc chicken
+  cow:                   54,  //  90t  all.npc cow
+  goblin:                84,  // 140t  all.npc goblin
+  man:                   30,  //  50t  all.npc man / alkharid.npc al_kharid_man
+  al_kharid_warrior:     30,  //  50t  alkharid.npc al_kharid_warrior
+  farmer:                30,  //  50t  all.npc farmer1
+  barbarian:             30,  //  50t  all.npc barbarian
+  dark_wizard:           60,  // 100t  all.npc young_dark_wizard (hp12)
+  dark_wizard_20:        60,  // 100t  all.npc bearded_dark_wizard (hp24)
+  wizard:                36,  //  60t  all.npc wizard
+  bear:                  60,  // 100t  all.npc darkbear (hp25) / brownbear both 100t
+  guard:                 60,  // 100t  all.npc guard1
+  tribesman:             60,  // 100t  all.npc tribesman (config hp39 ≈ our 30)
+  dwarf:                 60,  // 100t  all.npc dwarf_normal
+  dark_warrior:          60,  // 100t  all.npc dark_warrior
+  pirate:                30,  //  50t  all.npc pirate1
+  thug:                  60,  // 100t  all.npc thug
+  chaos_druid:           30,  //  50t  all.npc chaos_druid
+  druid:                 30,  //  50t  taverly.npc druid
+  otherworldly_being:    24,  //  40t  all.npc otherworldly_being
+  skeleton_unarmed:      84,  // 140t  all.npc skeleton_unagressive (hp24, by HP)
+  skeleton_armed:        42,  //  70t  all.npc skeleton_unarmed (hp29, by HP)
+  zombie_unarmed:        42,  //  70t  all.npc zombie_unarmed
+  zombie_armed:          42,  //  70t  all.npc zombie_armed
+  chaos_druid_warrior:   60,  // 100t  yanille.npc chaos_druid_warrior
+  black_knight:          30,  //  50t  all.npc black_knight
+  giant:                 36,  //  60t  all.npc giant (Hill Giant)
+  earth_warrior:         36,  //  60t  all.npc earthwarrior
+  white_knight:          60,  // 100t  falador.npc white_knight
+  ice_warrior:           36,  //  60t  all.npc icewarrior
+  shadow_warrior:        36,  //  60t  legends_guild.npc shadow_warrior
+  paladin:               60,  // 100t  all.npc paladin
+  mossgiant:             36,  //  60t  all.npc mossgiant
+  icegiant:              36,  //  60t  all.npc icegiant
+  jogre:                 36,  //  60t  all.npc jogre
+  chaos_dwarf:          180,  // 300t  all.npc dwarf_chaos
+  hellhound:           106.8, // 178t  all.npc hellhound
+  lesser_demon:          36,  //  60t  all.npc lesser_demon
+  greater_demon:         18,  //  30t  all.npc greater_demon
+  firegiant:             36,  //  60t  all.npc firegiant
+  black_demon:           36,  //  60t  all.npc black_demon
+  baby_blue_dragon:      36,  //  60t  all.npc babybluedragon
+  green_dragon:          36,  //  60t  all.npc green_dragon
+  blue_dragon:           36,  //  60t  all.npc blue_dragon
+  red_dragon:            36,  //  60t  all.npc red_dragon
+  black_dragon:          36,  //  60t  all.npc black_dragon
+  magicaxe:              36,  //  60t  all.npc magicaxe
+  // ---- NO EXPLICIT VALUE in Server@main → RESPAWN_DEFAULT, respawnVerified=false ----
+  //  highwayman, hobgoblin_unarmed, hobgoblin_armed, bandit, mountain_troll:
+  //     present in configs (all.npc / bandit_camp.npc) but the respawnrate field
+  //     is OMITTED → they inherit the server default in-game.
+  //  troll_general, dagannoth, dagannoth_92, rock_crab, ghoul,
+  //  elf_warrior_90, elf_warrior_108:
+  //     their quest/area configs (quest_troll, quest_horror, rock crab spawn,
+  //     elf areas) don't exist as readable text in Server@main — left at default,
+  //     NOT guessed. Set the exact value per-spot in the Cannon tab if you know it.
+};
+for (const m of MONSTERS) {
+  m.respawn = MONSTER_RESPAWN[m.id] ?? RESPAWN_DEFAULT;
+  m.respawnVerified = Object.prototype.hasOwnProperty.call(MONSTER_RESPAWN, m.id);
+}
+
+// =====================================================================
 // STATIC PRICES — items excluded from scraping with fixed values.
 // =====================================================================
 const STATIC_PRICES = {
@@ -1338,6 +1440,9 @@ const STATIC_PRICES = {
   mind_talisman:  500, earth_talisman: 500, air_talisman: 500,
   chaos_talisman: 500, fire_talisman:  500, body_talisman: 500,
   cosmic_talisman:500,   // nature talisman is the only one worth real value
+  // Ring of recoil — player-made (sapphire ring + lvl-1 enchant), not on the GE.
+  // ~sapphire ring + cosmic rune; used as the per-shatter supply cost (40 dmg/ring).
+  ring_of_recoil: 1500,
 };
 Object.assign(P, STATIC_PRICES);
 
