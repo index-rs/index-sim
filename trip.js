@@ -258,17 +258,46 @@
     // runs out before food/loot). Disable via trip.prayerRestore = false (e.g.
     // you flick prayers off, or recharge at an altar).
     const prayerPerKill = ctx.prayerPerKill || 0;
-    const prayerActive = prayerPerKill > 0 && (t.prayerRestore !== false);
+    const prayerDrains = prayerPerKill > 0;
+    // Restore mode — how you sustain prayer points when a draining prayer is on:
+    //   'potions' carry prayer pots (slots + gp, can be prayer-bound);
+    //   'altar'   walk to a nearby altar (costs TIME, no slots/pots, no gp);
+    //   'none'    flick/ignore (prayer treated as free — pure DPS gain).
+    // Legacy: trip.prayerRestore===false ⇒ 'none'.
+    const prayerMode = t.prayerMode || (t.prayerRestore === false ? 'none' : 'potions');
+    // Prayer potions carry their OWN quantity, independent of boost potions
+    // (defaults mirror the boost counts). They respect single-dose mode.
+    const prayerPotionSets  = Math.max(0, t.prayerPotionSets  ?? potionSets);
+    const prayerPotionDoses = Math.max(0, t.prayerPotionDoses ?? potionDoses);
+    const prayerQty          = singleDose ? prayerPotionDoses : prayerPotionSets;
+    const prayerDosesCarried = singleDose ? prayerPotionDoses : prayerPotionSets * dosesPerVial;
+    const prayerActive = prayerDrains && prayerMode === 'potions';
+    // Full prayer pool you start the trip with (= Prayer level) — it's free
+    // points before any potion is sipped, so it counts toward how long prayer
+    // lasts (both here and in altar mode below).
+    const prayerPool = Math.max(1, ctx.prayerLevel || 1);
     let prayerSlots = 0, prayerPointsCarried = 0, maxKillsPrayer = Infinity, prayerPointsPerDose = 0;
     if (prayerActive){
       const lvl = ctx.prayerLevel || 1;
       prayerPointsPerDose = Math.floor(lvl / 4) + 7;
-      prayerSlots = qtyPerType;                       // vials (or doses) like other pots
+      prayerSlots = prayerQty;                        // vials (or doses) like other pots
       potionSlots += prayerSlots;
-      prayerPointsCarried = dosesPerType * prayerPointsPerDose;
+      // Capacity = starting pool + every dose carried. Including the pool keeps
+      // this consistent with the dose recommendation (which subtracts the pool),
+      // so applying the rec actually clears the prayer-bound cap.
+      prayerPointsCarried = prayerPool + prayerDosesCarried * prayerPointsPerDose;
       maxKillsPrayer = prayerPerKill > 0 ? prayerPointsCarried / prayerPerKill : Infinity;
-      potionParts.push(singleDose ? `${potionDoses} prayer` : `${potionSets} prayer`);
+      potionParts.push(singleDose ? `${prayerPotionDoses} prayer` : `${prayerPotionSets} prayer`);
     }
+    // Altar mode — no potions/slots; you periodically walk to a nearby altar to
+    // recharge. Full pool = your Prayer level, drained at prayerPerKill, so you
+    // recharge every (pool/drain) kills; each round trip costs altarSeconds.
+    // Amortised to a per-kill TIME overhead that lowers effective kph (no gp).
+    const altarOn = prayerDrains && prayerMode === 'altar';
+    const altarSeconds = (t.altarSeconds != null && t.altarSeconds !== '')
+      ? Math.max(0, +t.altarSeconds) : 30;
+    const killsPerAltar = altarOn ? prayerPool / prayerPerKill : Infinity;
+    const altarSecPerKill = (altarOn && killsPerAltar > 0) ? altarSeconds / killsPerAltar : 0;
 
     // potion supply cost (per trip): doses carried × per-dose price.
     const ITEM0 = window.GameData?.ITEM_PRICES || {};
@@ -457,12 +486,21 @@
       const lootFraction = dropped > 0 ? Math.min(1, collected / dropped) : 1;
       const foodLeftAtEnd = isFinite(killsPerTrip) ? Math.max(0, fc - foodPerKill * killsPerTrip) : 0;
       let efficiency, effectiveKph, tripMinutes;
-      if (!isFinite(killsPerTrip) || bankSeconds <= 0){
+      if (!isFinite(killsPerTrip)){
+        // No banking trip (infinite). An altar recharge still costs time per
+        // kill, so it still drops effective kph even when you never bank.
+        if (altarSecPerKill > 0 && cycle > 0){
+          efficiency = cycle / (cycle + altarSecPerKill);
+          effectiveKph = ctx.kph * efficiency;
+        } else { efficiency = 1; effectiveKph = ctx.kph; }
+        tripMinutes = Infinity;
+      } else if (bankSeconds <= 0 && altarSecPerKill <= 0){
         efficiency = 1; effectiveKph = ctx.kph; tripMinutes = Infinity;
       } else {
         killsPerTrip = Math.max(1, killsPerTrip);
-        const killTripTime = killsPerTrip * cycle;     // seconds killing per trip
-        const tripTotal = killTripTime + bankSeconds;  // + banking
+        const killTripTime = killsPerTrip * cycle;        // seconds killing per trip
+        const altarTime = killsPerTrip * altarSecPerKill; // altar round-trips
+        const tripTotal = killTripTime + bankSeconds + altarTime;
         efficiency = killTripTime / tripTotal;
         effectiveKph = ctx.kph * efficiency;
         tripMinutes = tripTotal / 60;
@@ -501,6 +539,11 @@
     let { killsPerTrip, bound, freeAtStart, lootFraction,
           lootSlotsAtEnd, foodLeftAtEnd, efficiency, effectiveKph, tripMinutes } = R;
 
+    // Trip length bound by food/loot ONLY (before the prayer/recoil caps below).
+    // The prayer-dose recommendation aims to outlast THIS, so it isn't circular
+    // (basing it on the already-prayer-capped killsPerTrip would under-recommend).
+    const naturalKills = killsPerTrip;
+
     // Prayer-bound cap: if the prayer doses you carry run out before food/loot
     // ends the trip, prayer is the binding constraint — recompute the (shorter)
     // trip's loot fraction and banking efficiency for the capped kill count.
@@ -512,11 +555,12 @@
       lootFraction = dropped > 0 ? Math.min(1, collected / dropped) : 1;
       lootSlotsAtEnd = collected;
       foodLeftAtEnd = Math.max(0, foodCount - foodPerKill * killsPerTrip);
-      if (bankSeconds > 0){
+      if (bankSeconds > 0 || altarSecPerKill > 0){
         const killTripTime = killsPerTrip * cycle;
-        efficiency = killTripTime / (killTripTime + bankSeconds);
+        const tripTotal = killTripTime + bankSeconds + killsPerTrip * altarSecPerKill;
+        efficiency = killTripTime / tripTotal;
         effectiveKph = ctx.kph * efficiency;
-        tripMinutes = (killTripTime + bankSeconds) / 60;
+        tripMinutes = tripTotal / 60;
       }
     }
 
@@ -531,22 +575,33 @@
       lootFraction = dropped > 0 ? Math.min(1, collected / dropped) : 1;
       lootSlotsAtEnd = collected;
       foodLeftAtEnd = Math.max(0, foodCount - foodPerKill * killsPerTrip);
-      if (bankSeconds > 0){
+      if (bankSeconds > 0 || altarSecPerKill > 0){
         const killTripTime = killsPerTrip * cycle;
-        efficiency = killTripTime / (killTripTime + bankSeconds);
+        const tripTotal = killTripTime + bankSeconds + killsPerTrip * altarSecPerKill;
+        efficiency = killTripTime / tripTotal;
         effectiveKph = ctx.kph * efficiency;
-        tripMinutes = (killTripTime + bankSeconds) / 60;
+        tripMinutes = tripTotal / 60;
       }
     }
 
     // supplies cost per kill (food eaten + potions consumed). Prayer potions are
     // consumed at the drain rate, so they're costed per kill (like food), not as
-    // a flat per-trip vial count.
+    // a flat per-trip vial count. You START each trip with a full prayer book
+    // (recharged at the bank/altar for free), so a finite trip only PAYS for the
+    // points drained beyond that free pool; an infinite (no-bank) trip pays the
+    // steady-state rate (the one-time free pool is negligible).
     const ITEM = window.GameData?.ITEM_PRICES || {};
     const foodPrice = food.priceKey ? (ITEM[food.priceKey] ?? 0) : 0;
     const foodCostPerKill = foodPerKill * foodPrice;
-    const prayerCostPerKill = (prayerActive && prayerPointsPerDose > 0)
-      ? (prayerPerKill / prayerPointsPerDose) * perDose('prayer') : 0;
+    let prayerCostPerKill = 0;
+    if (prayerActive && prayerPointsPerDose > 0){
+      if (isFinite(killsPerTrip) && killsPerTrip > 0){
+        const dosesUsed = Math.max(0, (prayerPerKill * killsPerTrip - prayerPool) / prayerPointsPerDose);
+        prayerCostPerKill = (dosesUsed * perDose('prayer')) / killsPerTrip;
+      } else {
+        prayerCostPerKill = (prayerPerKill / prayerPointsPerDose) * perDose('prayer');
+      }
+    }
     const potionCostPerKill = (isFinite(killsPerTrip) && killsPerTrip > 0
       ? potionCostPerTrip / killsPerTrip : 0) + prayerCostPerKill;
 
@@ -556,6 +611,8 @@
       potionCostPerKill, potionCostPerTrip, singleDose, dosesPerType,
       prayerActive, prayerPerKill, prayerCostPerKill, prayerSlots,
       prayerPointsPerDose, maxKillsPrayer,
+      prayerMode, prayerDrains, prayerPool, naturalKills,
+      altarOn, altarSeconds, altarSecPerKill, killsPerAltar,
       recoilOn, recoilRings, recoilSpares, recoilRingsPerKill,
       recoilCostPerKill, maxKillsRecoil, recoilDmgPerKill,
       incoming: inc, eatenFood,
