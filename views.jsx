@@ -2996,6 +2996,17 @@ const ECO_NAME_FIX = {
   mcannonball:'Cannonball', cow_hide:'Cowhide', vial_water:'Vial of water',
   jug_wine:'Jug of wine', loop_half_key:'Loop half of key', tooth_half_key:'Tooth half of key',
 };
+// Economy display-name overrides — win over the loot-derived name map AND
+// ECO_NAME_FIX. For renames the raw loot/price keys get "wrong" for this tab.
+const ECO_NAME_OVERRIDE = {
+  unidentified_guam: 'Unidentified herb',
+  herb_ranarr:       'Ranarr weed',
+  guam_leaf:         'Guam leaf',
+};
+// Route a row's price/series from another (live-scraped) key. The static
+// "guam_leaf" row shows the live "herb_guam" market price instead of its stale
+// default — the market slug for herb_guam IS literally "guam_leaf".
+const ECO_PRICE_ALIAS = { guam_leaf: 'herb_guam' };
 let _ecoNameCache = null;
 function ecoNameMap(){
   if (_ecoNameCache) return _ecoNameCache;
@@ -3019,6 +3030,7 @@ function ecoNameMap(){
 function ecoLabel(key){
   const m = ecoNameMap();
   if (m[key]) return m[key];
+  if (ECO_NAME_OVERRIDE[key]) return ECO_NAME_OVERRIDE[key];
   if (ECO_NAME_FIX[key]) return ECO_NAME_FIX[key];
   // Named herbs: drop the "herb" prefix → just "Ranarr", "Marrentill", etc.
   if (/^herb_/.test(key)) return key.replace(/^herb_/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
@@ -3067,6 +3079,9 @@ const ECON_EXCLUDE = new Set([
   'rune_dagger','rune_longsword','rune_warhammer',
   // typo'd duplicate of herb_marrentill (the market site lists it as "marentill")
   'marentill',
+  // duplicate guam row: herb_guam is folded into the "Guam leaf" (guam_leaf)
+  // row via ECO_PRICE_ALIAS, so its own row is suppressed here.
+  'herb_guam',
 ]);
 
 let _ecoJunkCache = null;
@@ -3139,16 +3154,22 @@ function EconomyPane(){
       return null;
     };
     const out = [];
-    for (const [k, price] of Object.entries(latest.prices)){
+    for (const [k, priceRaw] of Object.entries(latest.prices)){
       if (useScraped && !scrapedKeys.has(k)) continue;   // no scraped price → drop
       if (junkSet.has(k)) continue;                      // skip/bury junk → drop
       if (ECON_EXCLUDE.has(k)) continue;
       if (k in statics) continue;
-      const b = baseValFor(k);
+      // Price-alias: read price/baseline/series from a different live key when
+      // mapped (guam_leaf → herb_guam) and that source actually has data.
+      const aliasKey = ECO_PRICE_ALIAS[k];
+      const srcKey = (aliasKey && typeof latest.prices[aliasKey] === 'number' && latest.prices[aliasKey] > 0)
+        ? aliasKey : k;
+      const price = latest.prices[srcKey];
+      const b = baseValFor(srcKey);
       if (typeof b !== 'number' || b <= 0) continue;
       const delta = price - b;
       const pct = delta / b;
-      const series = history.map(s => s.prices[k]).filter(v => typeof v === 'number' && v > 0);
+      const series = history.map(s => s.prices[srcKey]).filter(v => typeof v === 'number' && v > 0);
       out.push({ key:k, price, base:b, delta, pct, series });
     }
     return out;
