@@ -2112,6 +2112,9 @@ function TripPane({input, result, setTrip, setCannon}){
           <select className="select" value={t.protect||'none'} onChange={e=>setTrip({protect:e.target.value})}>
             {protOpts.map(([k,l])=> <option key={k} value={k}>{l}</option>)}
           </select>
+          {result && result.prayerDrainRate>0 && (
+            <PrayerOptions t={t} setTrip={setTrip} result={result} />
+          )}
           <Toggle label={`Safespot${t.safespot==null?' (auto)':''}`}
                   subOn="no incoming damage" subOff="taking hits" color="teal"
                   value={trip?!!trip.incoming.safespot:false}
@@ -2325,12 +2328,20 @@ function TripPane({input, result, setTrip, setCannon}){
               ({(t.recoverAmmo!==false)?'recovering 4/5':'no recovery'}) · {fmtK(result.ammoCostPerKill*result.effectiveKph)} gp/hr
             </div>
           )}
-          {result.trip.prayerActive && (
+          {result.trip.prayerDrains && (
             <div style={{padding:'0 14px 16px', fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.6}}>
               Prayer: drains ~{fmtInt(result.prayerPointsPerHour)} pts/hr
-              ({result.prayerDrainRate}/tick{(t.protect&&t.protect!=='none')?`, incl. protect-from-${t.protect}`:''}) ·
-              {' '}{fmtK(result.trip.prayerCostPerKill*result.effectiveKph)} gp/hr on prayer potions
-              {result.trip.bound==='prayer' ? ' · prayer runs out first — bank early' : ''}
+              ({result.prayerDrainRate}/tick{(t.protect&&t.protect!=='none')?`, incl. protect-from-${t.protect}`:''})
+              {result.trip.prayerMode==='potions' && <>
+                {' · '}{fmtK(result.trip.prayerCostPerKill*result.effectiveKph)} gp/hr on prayer potions
+                {result.trip.bound==='prayer' ? ' · prayer runs out first — bank early' : ''}
+              </>}
+              {result.trip.prayerMode==='altar' && <>
+                {' · altar recharge every '}{fmtInt(result.trip.killsPerAltar)} kills
+                {' (~'}{(result.trip.altarSeconds||0)}s round-trip) · costs
+                {' ~'}{Math.round((result.trip.altarSecPerKill||0)*result.effectiveKph/60)} min/hr, no gp
+              </>}
+              {result.trip.prayerMode==='none' && ' · flicking / ignored — no supply or time cost (pure DPS gain)'}
             </div>
           )}
         </>
@@ -3028,9 +3039,9 @@ function ecoNameMap(){
   return map;
 }
 function ecoLabel(key){
+  if (ECO_NAME_OVERRIDE[key]) return ECO_NAME_OVERRIDE[key];
   const m = ecoNameMap();
   if (m[key]) return m[key];
-  if (ECO_NAME_OVERRIDE[key]) return ECO_NAME_OVERRIDE[key];
   if (ECO_NAME_FIX[key]) return ECO_NAME_FIX[key];
   // Named herbs: drop the "herb" prefix → just "Ranarr", "Marrentill", etc.
   if (/^herb_/.test(key)) return key.replace(/^herb_/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
@@ -3841,6 +3852,109 @@ function CombatSpreadsheet(){
 // =======================================================================
 // SMALL PRIMITIVES
 // =======================================================================
+// Prayer restore options — how you sustain prayer points when a draining
+// prayer (offensive boost or protection) is active. Three modes, each with
+// a different cost shape so the user can see why a boost prayer can drag
+// down gp/xp per hour: Potions (slots + gp, can be prayer-bound), Altar
+// (time cost, no slots/gp), or Flick (free — pure DPS gain).
+function PrayerOptions({t, setTrip, result}){
+  const mode = t.prayerMode || (t.prayerRestore === false ? 'none' : 'potions');
+  const trip = result.trip || {};
+  const single = !!t.singleDose;
+  const setMode = (m) => setTrip({ prayerMode: m, prayerRestore: m !== 'none' });
+  const modes = [['potions','Potions'],['altar','Altar'],['none','Flick']];
+  // Prayer-dose recommendation: how many doses to outlast the (food/loot-bound)
+  // trip. You start with a full prayer pool (= Prayer level) for free, then each
+  // dose restores floor(level/4)+7 points; drain is prayerPerKill × kills.
+  const prayerRec = (() => {
+    const ppk = result.prayerPerKill || 0;
+    const natural = trip.naturalKills;
+    const lvl = result.prayerLevel || trip.prayerPool || 1;
+    const perDose = Math.floor(lvl / 4) + 7;
+    const pool = trip.prayerPool || lvl;
+    if (!(ppk > 0) || !isFinite(natural) || natural <= 0 || perDose <= 0) return null;
+    const doses = Math.max(0, Math.ceil((ppk * natural - pool) / perDose));
+    return { doses, vials: Math.ceil(doses / 4), perDose,
+      killMin: (result.cycleSec || 0) * natural / 60 };
+  })();
+  const recMatched = prayerRec && (single
+    ? (t.prayerPotionDoses ?? t.potionDoses ?? 4) === prayerRec.doses
+    : (t.prayerPotionSets ?? t.potionSets ?? 1) === prayerRec.vials);
+  const btn = (active) => ({
+    flex:1, padding:'5px 0', fontFamily:'var(--mono)', fontSize:10, cursor:'pointer',
+    textTransform:'uppercase', letterSpacing:'.5px', borderRadius:3,
+    border:'1px solid '+(active?'var(--violet)':'var(--border-2)'),
+    background: active?'color-mix(in oklab, var(--violet) 18%, var(--bg-1))':'var(--bg-2)',
+    color: active?'var(--text-1)':'var(--text-3)',
+  });
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:8, padding:'9px 10px', borderRadius:3,
+      border:'1px solid color-mix(in oklab, var(--violet) 25%, var(--border-2))',
+      background:'color-mix(in oklab, var(--violet) 7%, var(--bg-1))'}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <span style={{fontFamily:'var(--mono)', fontSize:10, textTransform:'uppercase', letterSpacing:'.5px', color:'var(--text-2)'}}>Prayer options</span>
+        <span style={{fontFamily:'var(--mono)', fontSize:9, color:'var(--text-3)'}}>{result.prayerDrainRate}/tick drain</span>
+      </div>
+      <div style={{display:'flex', gap:5}}>
+        {modes.map(([k,l])=>(
+          <button key={k} type="button" style={btn(mode===k)} onClick={()=>setMode(k)}>{l}</button>
+        ))}
+      </div>
+      {mode==='potions' && (
+        <>
+          {single
+            ? <NumField label="Prayer-pot doses" v={t.prayerPotionDoses ?? t.potionDoses ?? 4} onChange={v=>setTrip({prayerPotionDoses:Math.max(0,v)})} />
+            : <NumField label="Prayer-pot vials (4-dose)" v={t.prayerPotionSets ?? t.potionSets ?? 1} onChange={v=>setTrip({prayerPotionSets:Math.max(0,v)})} />}
+          <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
+            {trip.prayerSlots||0} slot{trip.prayerSlots===1?'':'s'} · ~{fmtK((trip.prayerCostPerKill||0)*result.effectiveKph)} gp/hr
+            {trip.bound==='prayer' ? <span style={{color:'var(--amber)'}}> · prayer-bound — banks early</span> : ''}
+          </div>
+          {prayerRec && prayerRec.doses>0 && (
+            <div style={{padding:'7px 9px', borderRadius:3,
+              border:'1px solid '+(recMatched?'var(--border-2)':'color-mix(in oklab, var(--violet) 45%, var(--border-2))'),
+              background: recMatched?'var(--bg-1)':'color-mix(in oklab, var(--violet) 12%, var(--bg-1))',
+              fontFamily:'var(--mono)', fontSize:10, color:'var(--text-2)', lineHeight:1.5}}>
+              <span style={{color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.5px'}}>Recommended</span>{' '}
+              <span style={{color:'var(--text-1)'}}>{prayerRec.doses} dose{prayerRec.doses===1?'':'s'}</span>
+              {' '}({single?`${prayerRec.doses} single`:`${prayerRec.vials} × (4)-vial`}) to outlast the {prayerRec.killMin.toFixed(0)}min trip.
+              {!recMatched && (
+                <button type="button"
+                  onClick={()=>setTrip(single?{prayerPotionDoses:prayerRec.doses}:{prayerPotionSets:prayerRec.vials})}
+                  style={{marginLeft:6, padding:'2px 8px', fontFamily:'var(--mono)', fontSize:10, cursor:'pointer',
+                    borderRadius:3, border:'1px solid color-mix(in oklab, var(--violet) 45%, var(--border-2))',
+                    background:'color-mix(in oklab, var(--violet) 16%, var(--bg-2))', color:'var(--violet)'}}>
+                  apply
+                </button>
+              )}
+            </div>
+          )}
+          {prayerRec && prayerRec.doses===0 && (
+            <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
+              Your prayer pool lasts the whole trip — no prayer potions needed.
+              Switch to <span style={{color:'var(--text-2)'}}>Flick</span> to free the slot.
+            </div>
+          )}
+        </>
+      )}
+      {mode==='altar' && (
+        <>
+          <NumField label="Altar round-trip (sec)" v={t.altarSeconds ?? 30} step={5} onChange={v=>setTrip({altarSeconds:Math.max(0,v)})} />
+          <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
+            Recharge every {fmtInt(trip.killsPerAltar)} kills (pool {trip.prayerPool}) ·
+            ~{Math.round((trip.altarSecPerKill||0)*result.effectiveKph/60)} min/hr lost · no potions, no gp
+          </div>
+        </>
+      )}
+      {mode==='none' && (
+        <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
+          Flick prayers so drain is negligible — no slots, no gp, no time. The
+          boost shows as a pure DPS gain.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Toggle({label, subOn, subOff, value, onChange, color='teal'}){
   return (
     <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none'}}>
