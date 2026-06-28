@@ -515,6 +515,27 @@
     return (peak + lo) / 2;
   }
 
+  // Fluid potion-decay sampler. Given each boosted stat's { base, peakL }, return
+  // an array of per-minute LEVEL samples from peak down to the repot threshold
+  // (auto = peak−10). Stats decay together (you pot the set at once) and you
+  // repot when the first reaches its threshold, so the horizon T = the smallest
+  // active decay span. Each integer level is held ~1 minute (≈1 lvl/min linear
+  // decay), so an equal-weight average over the samples IS the time average.
+  // The caller computes max hit / accuracy PER sample then averages — correctly
+  // capturing the integer max-hit steps as the boost bleeds off, unlike averaging
+  // the level first and flooring once. sus=false (or no boost) → a single peak
+  // sample, byte-identical to no averaging.
+  function decayLevelSamples(stats, repotThreshold, sus){
+    if (!sus) return [stats.map(s => s.peakL)];
+    const thrOf = (s) => repotThreshold != null ? Math.max(s.base, repotThreshold) : Math.max(s.base, s.peakL - 10);
+    const spans = stats.map(s => Math.max(0, s.peakL - thrOf(s)));
+    const active = spans.filter(x => x > 0);
+    const T = active.length ? Math.min(...active) : 1;
+    const out = [];
+    for (let t = 0; t < T; t++) out.push(stats.map(s => Math.max(s.base, s.peakL - t)));
+    return out;
+  }
+
   // DBA special attack — VERIFIED from LostCityRS/Content@274
   //   scripts/skill_combat/scripts/player/specwep.rs2 (combat_axe:specbar)
   //   drained_X     = stat(X) / 10           (X = att, def, rng, mag)
@@ -561,6 +582,11 @@
 
     let effAcc, effDmg, mh, dbaInfo = null;
     let accBonusEff = input.accBonus;   // may be augmented by ammo (ranged)
+    // Fluid sustained model: each branch fills offSamples with one entry per
+    // decay minute ({effAcc, effDmg, mh}); avgHit/hitChance are averaged across
+    // them below. offSamples[0] is always the freshly-potted PEAK.
+    let offSamples = null;
+    const meanOf = (arr, k) => arr.reduce((s, o) => s + o[k], 0) / arr.length;
     if (input.combatType === 'melee'){
       const attBase   = input.attack;
       const strBase   = input.strength;
@@ -574,31 +600,22 @@
       // When DBA is active: str = base + dbaBoost (no str pot applied).
       // Attack cycles normally (pot + restore + repot after spec).
       let effAttBase, effStrBase;
-      if (sus && repot != null){
-        // Attack: the DBA spec's attack drain is fully undone by the restore
-        // dose, and super-attack is maintained — so attack averages exactly
-        // like a normal super-attack potion (no DBA penalty).
-        const attAvg = normalSustained(attBase, potAtt, repot);
-        effAttBase = attAvg;
-        if (dba){
-          // Strength comes from the DBA spec instead of a super-str dose,
-          // treated as a potion: peak = base + boost, decaying to its repot.
-          const peakStr = strBase + dbaInfo.totalBoost;
-          const thrStr  = input.repotThreshold ?? (peakStr - 10);
-          effStrBase = dbaSustainedStr(strBase, dbaInfo.totalBoost, thrStr);
-        } else {
-          effStrBase = normalSustained(strBase, potStr, repot);  // normal sustained
-        }
-      } else {
-        effAttBase = Math.floor(potAtt(attBase));
-        effStrBase = dba
-          ? strBase + dbaInfo.totalBoost          // peak (no averaging)
-          : Math.floor(potStr(strBase));           // normal pot
-      }
-
-      effAcc = Math.floor(effAttBase * prayer.att) + style.accBonus + 8;
-      effDmg = Math.floor(effStrBase * prayer.str) + style.dmgBonus + 8;
-      mh = maxHitMelee(effDmg, input.dmgBonus);
+      const peakAttL = Math.floor(potAtt(attBase));
+      const peakStrL = dba ? (strBase + dbaInfo.totalBoost) : Math.floor(potStr(strBase));
+      // Fluid decay: sample boosted levels minute-by-minute from peak to repot,
+      // computing max hit + accuracy at EACH integer level, then averaging.
+      const lvlSamples = decayLevelSamples(
+        [{ base: attBase, peakL: peakAttL }, { base: strBase, peakL: peakStrL }],
+        input.repotThreshold ?? null, sus);
+      offSamples = lvlSamples.map(([attL, strL]) => {
+        const ea = Math.floor(attL * prayer.att) + style.accBonus + 8;
+        const ed = Math.floor(strL * prayer.str) + style.dmgBonus + 8;
+        return { effAcc: ea, effDmg: ed, mh: maxHitMelee(ed, input.dmgBonus) };
+      });
+      void effAttBase; void effStrBase;
+      effAcc = meanOf(offSamples, 'effAcc');
+      effDmg = meanOf(offSamples, 'effDmg');
+      mh     = meanOf(offSamples, 'mh');
 
     } else if (input.combatType === 'ranged'){
       // Ranged: no offensive ranged prayers in rev 274. Ammo (arrow) range
@@ -607,27 +624,27 @@
       // rangebonus from the selected ammo (0 if none/custom).
       const rngBase = input.ranged;
       const potRng  = l => potion.fn('rng', l);
-      let rngLevel  = sus && repot != null
-        ? normalSustained(rngBase, potRng, repot)
-        : Math.floor(potRng(rngBase));
-      effAcc = rngLevel + style.accBonus + 8;
-      effDmg = rngLevel + style.dmgBonus + 8;
+      const peakRngL = Math.floor(potRng(rngBase));
       const ammoBonus = input.ammoRangeBonus || 0;
-      // accuracy uses bow attack bonus + ammo; max hit uses ranged str (ammo)
-      mh = maxHitRanged(effDmg, input.dmgBonus + ammoBonus);
       accBonusEff = input.accBonus + ammoBonus;
+      const rngSamples = decayLevelSamples([{ base: rngBase, peakL: peakRngL }], input.repotThreshold ?? null, sus);
+      offSamples = rngSamples.map(([rngL]) => {
+        const ed = rngL + style.dmgBonus + 8;
+        // accuracy uses bow attack bonus + ammo; max hit uses ranged str (ammo)
+        return { effAcc: rngL + style.accBonus + 8, effDmg: ed, mh: maxHitRanged(ed, input.dmgBonus + ammoBonus) };
+      });
+      effAcc = meanOf(offSamples, 'effAcc');
+      effDmg = meanOf(offSamples, 'effDmg');
+      mh     = meanOf(offSamples, 'mh');
 
     } else { // magic
       // Magic uses NO prayer boost (no magic prayers in rev 274) and a fixed
-      // style bonus of +1 (verified player_combat_stat.rs2). Accuracy roll
-      // uses the (potion-boosted) magic level; damage is the spell's base.
+      // style bonus of +1 (verified player_combat_stat.rs2). Accuracy roll uses
+      // the (potion-boosted) magic level; damage is the spell's base, so a magic
+      // potion only decays ACCURACY, not max hit.
       const magBase = input.magic;
       const potMag  = l => potion.fn('mag', l);
-      const magLvl  = sus && repot != null
-        ? normalSustained(magBase, potMag, repot)
-        : Math.floor(potMag(magBase));
-      effAcc = magLvl + 8 + 1;          // effective magic for accuracy
-      effDmg = magBase;
+      const peakMagL = Math.floor(potMag(magBase));
       // Chaos gauntlets: +3 max hit to BOLT spells only (verified — gauntlets
       // affect bolt-tier only, not strike/blast/wave).
       const spellId = input.spell || '';
@@ -640,7 +657,12 @@
       // the three god spells.
       let effSpellBase = input.spellBase || 0;
       if (spellObj?.god && input.charge !== false) effSpellBase = 30;
-      mh = maxHitMagic(effSpellBase, input.dmgBonus) + chaosBonus;
+      const mhConst = maxHitMagic(effSpellBase, input.dmgBonus) + chaosBonus;
+      const magSamples = decayLevelSamples([{ base: magBase, peakL: peakMagL }], input.repotThreshold ?? null, sus);
+      offSamples = magSamples.map(([magL]) => ({ effAcc: magL + 8 + 1, effDmg: magBase, mh: mhConst }));
+      effAcc = meanOf(offSamples, 'effAcc');
+      effDmg = magBase;
+      mh = mhConst;
     }
 
     const attRoll = roll(effAcc, accBonusEff);
@@ -662,8 +684,22 @@
     }
     const monDefBonus = m[monDefField] ?? 0;
     const monDefRoll = (monDefLvl + 9) * (monDefBonus + 64);
-    const hc = hitChance(attRoll, monDefRoll);
-    const avgHit = (mh / 2) * hc;
+    let hc, avgHit;
+    if (offSamples && offSamples.length > 1){
+      // Fluid: average expected damage over the decay samples, each using its own
+      // integer max hit + accuracy roll (NOT a single mean level).
+      let sumHc = 0, sumAvg = 0;
+      for (const o of offSamples){
+        const ar = roll(o.effAcc, accBonusEff);
+        const h = hitChance(ar, monDefRoll);
+        sumHc += h; sumAvg += (o.mh / 2) * h;
+      }
+      hc = sumHc / offSamples.length;
+      avgHit = sumAvg / offSamples.length;
+    } else {
+      hc = hitChance(attRoll, monDefRoll);
+      avgHit = (mh / 2) * hc;
+    }
 
     // attack speed — ranged 'rapid' shaves a tick
     const baseTicks = input.attackSpeed;
@@ -989,6 +1025,11 @@
     skillXpPerKill.hp = hpXpPerKill;
 
     // Loot EV — flatten nested gem/rare arrays + apply Ring of Wealth + per-drop loot prefs
+    // Per-monster random-jewel spot: 'overground' (nature talisman ~15k) or
+    // 'underground' (chaos talisman ~500). Default underground. Set BEFORE
+    // adjustForRoW so the gem drop's price + GEM_EV_* reflect this monster's spot.
+    const jewelSpot = (input.jewelSpotByMonster && m && input.jewelSpotByMonster[m.id]) || 'underground';
+    if (window.GameData && window.GameData.setJewelSpot) window.GameData.setJewelSpot(jewelSpot);
     const lootTable = window.GameData?.adjustForRoW
       ? window.GameData.adjustForRoW(m, !!input.ringOfWealth)
       : (m.loot || []);
@@ -1293,7 +1334,7 @@
 
     return {
       combatType: input.combatType,
-      effAcc, effDmg, maxHit: mh,
+      effAcc, effDmg, maxHit: mh, peakMaxHit: offSamples ? offSamples[0].mh : mh,
       attRoll, defRoll: monDefRoll, hitChance: hc, avgHit,
       attackSpeedSec: speedSec, attackTicks: ticks,
       dps, effDps, specInfo, ttkSec: ttkEff, cycleSec: cycle, overheadSec: overhead, killsPerHour: kph,

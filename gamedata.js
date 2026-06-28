@@ -98,7 +98,7 @@ Object.assign(P, {
   "herb_irit":3760,"herb_kwuarm":4400,"herb_lantadyme":3940,"herb_marrentill":69,
   "herb_ranarr":5460,"herb_tarromin":918,"iron_arrow":17,"iron_bar":474,"iron_ore":298,
   "lawrune":309,"limpwurt_root":2500,"lobster":224,"loop_half_key":81200,"magic_staff":553,
-  "marentill":69,"mindrune":19,"mithril_arrow":69,"mithril_bar":2180,"mithril_chainbody":828,
+  "mindrune":19,"mithril_arrow":69,"mithril_bar":2180,"mithril_chainbody":828,
   "mithril_kiteshield":4333,"mithril_ore":505,"mithril_sq_shield":594,"naturerune":351,
   "rune_2h":48800,"rune_arrow":301,"rune_battleaxe":24618,"rune_chainbody":38520,"rune_dagger":4458,
   "rune_full_helm":30400,"rune_kiteshield":40000,"rune_knife":2000,"rune_longsword":18858,
@@ -257,11 +257,20 @@ const JEWEL_TABLE = [
   { name:'Rune javelin ×5',lo:58, hi:59, price: (P.rune_javelin ?? 150) * 5 },
   { name:'Half key (loop)',lo:59, hi:60, price: P.keyhalf1 ?? 12000 },
   { name:'Half key (tooth)',lo:60,hi:61, price: P.keyhalf2 ?? 12000 },
-  // Source: nature talisman overground, chaos talisman underground (coordz>6400).
-  // The sim can't track player plane, so assume chaos (also sub-2000, so the
-  // 'value' filter leaves it on the ground either way — nobody banks these).
-  { name:'Chaos talisman', lo:61, hi:65, price: P.chaos_talisman ?? 500 },
+  // Talisman slot: nature talisman OVERGROUND, chaos talisman UNDERGROUND
+  // (coordz>6400). @274. The sim can't read the player's plane, so it's a
+  // per-monster toggle (default underground = chaos). setJewelSpot() swaps
+  // this band in place; it's tagged so recalc/expand can find it.
+  { name:'Chaos talisman', key:'chaos_talisman', talisman:true, lo:61, hi:65, price: P.chaos_talisman ?? 500 },
 ];
+// The two talisman variants for the jewel table's last band. Nature (overground)
+// is worth real value (~15k @ markets.lostcity.rs); chaos (underground) ~500.
+// Default underground for every monster — matches the historical behaviour.
+const JEWEL_TALISMAN = {
+  underground: { name:'Chaos talisman',  key:'chaos_talisman',  fallback:500   },
+  overground:  { name:'Nature talisman', key:'nature_talisman', fallback:15000 },
+};
+let CURRENT_JEWEL_SPOT = 'underground';
 function jewelEV(denom){
   // each band contributes (hi-lo)/denom × price, but only bands with lo<denom count
   return JEWEL_TABLE.reduce((s,b)=> s + (Math.max(0, Math.min(b.hi,denom) - b.lo) / denom) * b.price, 0);
@@ -285,7 +294,7 @@ let GEM_EV_ROW_HIGH  = jewelEVHigh(65);
 let GEM_KEEP_FRAC_BASE = jewelKeepFrac(128);
 let GEM_KEEP_FRAC_ROW  = jewelKeepFrac(65);
 // expand list for the loot UI
-const JEWEL_EXPAND = JEWEL_TABLE.map(b => ({ name:b.name, weight:b.hi-b.lo, price:b.price }));
+const JEWEL_EXPAND = JEWEL_TABLE.map(b => ({ name:b.name, weight:b.hi-b.lo, price:b.price, talisman:!!b.talisman }));
 // Mega-rare table is reachable from the jewel roll (rare sub-table) — show it.
 JEWEL_EXPAND.push({ name:'→ Mega-rare table (rune spear · dragon sq shield · dragon spear)', weight:1, price:0 });
 
@@ -299,6 +308,9 @@ function recalcGemEV(){
     'Uncut diamond':  P.uncut_diamond  ?? P.diamond  ?? 2200,
   };
   JEWEL_TABLE.forEach(b => { if (priceFor[b.name] != null) b.price = priceFor[b.name]; });
+  // Keep the talisman band's price live too (it's keyed, not in priceFor).
+  const tband = JEWEL_TABLE.find(b => b.talisman);
+  if (tband && tband.key) tband.price = P[tband.key] ?? tband.price;
   JEWEL_EXPAND.forEach(e => { const t = JEWEL_TABLE.find(b=>b.name===e.name); if (t) e.price = t.price; });
   GEM_EV_BASE = jewelEV(128);
   GEM_EV_ROW  = jewelEV(65);
@@ -320,6 +332,22 @@ function recalcGemEV(){
   // Casket value depends on gem + half-key prices — refresh it too.
   P.casket = casketValue();
   return { GEM_EV_BASE, GEM_EV_ROW, GEM_EV_BASE_HIGH, GEM_EV_ROW_HIGH, HERB_EV, HERB_EV_HIGH };
+}
+
+// Swap the jewel table's talisman band between OVERGROUND (nature talisman) and
+// UNDERGROUND (chaos talisman), then recompute every gem EV + the expand list.
+// The engine calls this per-monster (before adjustForRoW) so GEM_EV_* and the
+// gem drop's price reflect that monster's spot. Default 'underground'.
+function setJewelSpot(spot){
+  if (spot !== 'overground' && spot !== 'underground') spot = 'underground';
+  CURRENT_JEWEL_SPOT = spot;
+  const t = JEWEL_TALISMAN[spot];
+  const band = JEWEL_TABLE.find(b => b.talisman);
+  if (band){ band.name = t.name; band.key = t.key; band.price = P[t.key] ?? t.fallback; }
+  const ex = JEWEL_EXPAND.find(e => e.talisman);
+  if (ex){ ex.name = t.name; ex.price = band ? band.price : (P[t.key] ?? t.fallback); }
+  recalcGemEV();
+  return CURRENT_JEWEL_SPOT;
 }
 
 // ---- [proc,ultrarare_getitem] — random(128) -------------------------
@@ -1438,11 +1466,11 @@ for (const m of MONSTERS) {
 const STATIC_PRICES = {
   rune_javelin:   100,   // no one buys these
   mind_talisman:  500, earth_talisman: 500, air_talisman: 500,
-  chaos_talisman: 500, fire_talisman:  500, body_talisman: 500,
-  cosmic_talisman:500,   // nature talisman is the only one worth real value
-  // Ring of recoil — player-made (sapphire ring + lvl-1 enchant), not on the GE.
-  // ~sapphire ring + cosmic rune; used as the per-shatter supply cost (40 dmg/ring).
-  ring_of_recoil: 1500,
+  fire_talisman:  500, body_talisman: 500, cosmic_talisman:500,
+  // chaos & nature talisman and ring of recoil are now SCRAPED from the live
+  // market (see scrape_prices.py DEFAULT_ITEMS + market.js). Their fallbacks
+  // live at the use-sites: JEWEL_TALISMAN (chaos 500 / nature 15000) and the
+  // recoil supply cost in trip.js (?? 1500).
 };
 Object.assign(P, STATIC_PRICES);
 
@@ -1622,6 +1650,8 @@ window.GameData = {
   get MEGA_EV(){ return MEGA_EV; },
   ULTRARARE_EV,
   recalcGemEV,
+  setJewelSpot,
+  get currentJewelSpot(){ return CURRENT_JEWEL_SPOT; },
   adjustForRoW,
   defaultLootAction,
   isBulkUnsellable,

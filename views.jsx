@@ -309,6 +309,11 @@ function makeDefaults(combatType = 'melee', monsterId){
     // Per-monster kill overhead override (monsterId → seconds). null/absent →
     // engine default (scales 2–4s by loot/roam). Editable in the Loot tab.
     overheadByMonster: {},
+    // Per-monster random-jewel spot (monsterId → 'overground' | 'underground').
+    // Overground drops a nature talisman (~15k), underground a chaos talisman
+    // (~500). Default underground for every monster. Editable in the Loot tab
+    // when the random-jewel sub-table is expanded.
+    jewelSpotByMonster: {},
     defaultSetup: null,
     editingDefault: false,
     duelSetups: [],
@@ -1775,6 +1780,26 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                           <span style={{color:'var(--text-4)'}}> ({e.weight}w)</span>
                         </span>
                       ))}
+                      {d.tag === 'gem' && (() => {
+                        const spot = (input.jewelSpotByMonster||{})[m.id] || 'underground';
+                        const seg = (key, label) => (
+                          <button type="button" className={spot===key?'active':''}
+                            onClick={ev=>{ ev.stopPropagation(); set && set('__setJewelSpot', key); }}>{label}</button>
+                        );
+                        return (
+                          <div style={{marginTop:8, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}
+                            onClick={ev=>ev.stopPropagation()}>
+                            <span style={{color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.05em'}}>Talisman spot</span>
+                            <div className="seg" style={{fontSize:10}}>
+                              {seg('overground','Overground · nature')}
+                              {seg('underground','Underground · chaos')}
+                            </div>
+                            <span style={{color: spot==='overground'?'var(--green)':'var(--text-4)'}}>
+                              {spot==='overground' ? 'nature talisman ~15k · banked' : 'chaos talisman ~500 · left on ground'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </td>
@@ -2007,10 +2032,12 @@ function TripPane({input, result, setTrip, setCannon}){
         {/* Food */}
         <div style={{display:'flex', flexDirection:'column', gap:6}}>
           <div className="label-cap">Food</div>
-          <select className="select" value={t.foodKey||'lobster'} onChange={e=>setTrip({foodKey:e.target.value})}>
-            {Object.entries(FOOD).filter(([k])=>k!=='none').map(([k,v])=>
-              <option key={k} value={k}>{v.name} · heals {v.heal}</option>)}
-          </select>
+          <SearchSelect
+            value={t.foodKey||'lobster'}
+            onChange={k=>setTrip({foodKey:k})}
+            placeholder="Type to search food…"
+            options={Object.entries(FOOD).filter(([k])=>k!=='none').map(([k,v])=>
+              ({ key:k, label:v.name, hint:`heals ${v.heal}` }))} />
           <div className="field">
             <label>Food brought (slots) · {t.foodCount==null?'auto':'manual'}</label>
             <input className="input" type="number" min="0"
@@ -2955,6 +2982,357 @@ function SettingsPane({input, hiddenTiers = {}, setHiddenTiers}){
 }
 
 // =======================================================================
+// ECONOMY PANE — price-history timeline + biggest movers
+// =======================================================================
+// In-game item names. Most price keys come straight from monster loot drops,
+// which carry real display names ("Chaos rune ×2" → key "chaosrune"); we build a
+// key→name map from those once, strip the "×N" qty, and fall back to a small
+// fixup table (for concatenated rune/ammo keys) then a prettified key.
+const ECO_NAME_FIX = {
+  airrune:'Air rune', waterrune:'Water rune', earthrune:'Earth rune', firerune:'Fire rune',
+  mindrune:'Mind rune', bodyrune:'Body rune', chaosrune:'Chaos rune', deathrune:'Death rune',
+  bloodrune:'Blood rune', naturerune:'Nature rune', lawrune:'Law rune', cosmicrune:'Cosmic rune',
+  soulrune:'Soul rune', astralrune:'Astral rune',
+  mcannonball:'Cannonball', cow_hide:'Cowhide', vial_water:'Vial of water',
+  jug_wine:'Jug of wine', loop_half_key:'Loop half of key', tooth_half_key:'Tooth half of key',
+};
+let _ecoNameCache = null;
+function ecoNameMap(){
+  if (_ecoNameCache) return _ecoNameCache;
+  const map = {};
+  const G = window.GameData;
+  if (G && G.MONSTERS){
+    for (const m of G.MONSTERS){
+      for (const d of (m.loot || []).flat()){
+        if (d && d.key && d.name && !map[d.key]){
+          map[d.key] = String(d.name)
+            .replace(/\s*[×x]\s*\d+\s*$/i, '')   // strip "×N" qty suffix
+            .replace(/\(noted\)/ig, '')
+            .replace(/\s+/g, ' ').trim();
+        }
+      }
+    }
+  }
+  if (Object.keys(map).length) _ecoNameCache = map;   // only cache once populated
+  return map;
+}
+function ecoLabel(key){
+  const m = ecoNameMap();
+  if (m[key]) return m[key];
+  if (ECO_NAME_FIX[key]) return ECO_NAME_FIX[key];
+  // Named herbs: drop the "herb" prefix → just "Ranarr", "Marrentill", etc.
+  if (/^herb_/.test(key)) return key.replace(/^herb_/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+  return String(key).replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+function ecoRelTime(ts){
+  if (!ts) return '—';
+  const sec = Date.now()/1000 - ts;
+  if (sec < 90) return 'just now';
+  const m = sec/60;  if (m < 90) return `${Math.round(m)}m ago`;
+  const h = m/60;    if (h < 36) return `${Math.round(h)}h ago`;
+  const d = h/24;    if (d < 14) return `${Math.round(d)}d ago`;
+  return `${Math.round(d/7)}w ago`;
+}
+// Inline price-trajectory sparkline. Pure data-viz polyline (not illustration).
+function EcoSparkline({series, w=88, h=24, color='var(--text-3)'}){
+  if (!series || series.length < 2)
+    return <span style={{display:'inline-block', width:w, height:h, opacity:.4,
+      fontFamily:'var(--mono)', fontSize:9, color:'var(--text-4)', lineHeight:`${h}px`}}>—</span>;
+  const min = Math.min(...series), max = Math.max(...series);
+  const span = (max - min) || 1;
+  const pts = series.map((v,i) => {
+    const x = (i/(series.length-1))*(w-2)+1;
+    const y = (h-2) - ((v-min)/span)*(h-4) + 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const last = series[series.length-1], lastPt = pts[pts.length-1].split(',');
+  return (
+    <svg width={w} height={h} style={{display:'block'}}>
+      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.25"
+        strokeLinejoin="round" strokeLinecap="round" opacity="0.85"/>
+      <circle cx={lastPt[0]} cy={lastPt[1]} r="1.7" fill={color}/>
+    </svg>
+  );
+}
+
+// Items excluded from the Economy movers: the 21 rune/adamant/mithril gear pieces
+// that are no longer market-scraped (their prices are now static snapshots in
+// prices.json, so any "move" they'd show is an artifact, not real market data).
+const ECON_EXCLUDE = new Set([
+  'adamant_axe','adamant_full_helm','adamant_kiteshield','adamant_med_helm',
+  'adamant_platebody','adamant_platelegs','adamant_sq_shield','adamant_warhammer',
+  'mithril_2h_sword','mithril_axe','mithril_battleaxe','mithril_chainbody',
+  'mithril_kiteshield','mithril_mace','mithril_platebody','mithril_spear',
+  'mithril_sq_shield','mithril_sword',
+  'rune_dagger','rune_longsword','rune_warhammer',
+  // typo'd duplicate of herb_marrentill (the market site lists it as "marentill")
+  'marentill',
+]);
+
+let _ecoJunkCache = null;
+// Junk = items the sim's own loot system marks 'skip' or 'bury' (left on the
+// ground: empty oysters, seaweed, ashes, bones, raw meat, low-tier gear…), plus
+// the worthless food/veg stragglers below that no monster drops with a skip/bury
+// action. Even when a scraped market price exists for them, they're not real
+// movers — so the Economy tab drops them outright.
+const ECON_EXTRA_JUNK = new Set([
+  'raw_rat_meat','raw_bear_meat','raw_beef','raw_chicken',
+  'grapes','cabbage','potato','onion','bucket_milk',
+]);
+function ecoJunkSet(){
+  if (_ecoJunkCache) return _ecoJunkCache;
+  const G = window.GameData;
+  const set = new Set(ECON_EXTRA_JUNK);
+  if (G && G.MONSTERS && G.defaultLootAction){
+    const kept = new Set();
+    for (const m of G.MONSTERS){
+      for (const d of (m.loot || []).flat()){
+        if (!d || !d.key) continue;
+        const a = G.defaultLootAction(d);
+        if (a === 'skip' || a === 'bury') set.add(d.key);
+        else kept.add(d.key);   // same key kept elsewhere → not junk
+      }
+    }
+    for (const k of kept) if (!ECON_EXTRA_JUNK.has(k)) set.delete(k);
+  }
+  if (set.size) _ecoJunkCache = set;
+  return set;
+}
+
+function EconomyPane(){
+  const [tick, setTick] = React.useState(0);
+  const [baseMode, setBaseMode] = React.useState('prev');   // 'prev' | 'first'
+  const [sortKey, setSortKey] = React.useState('pct');      // pct | abs | price | name
+  const [dir, setDir] = React.useState(-1);
+  const [q, setQ] = React.useState('');
+  const [flash, setFlash] = React.useState('');
+
+  const history = React.useMemo(
+    () => (window.getPriceHistory ? window.getPriceHistory() : []).slice().sort((a,b)=>a.t-b.t),
+    [tick]
+  );
+  const latest = history[history.length-1];
+  const baseIdx = baseMode==='first' ? 0 : history.length-2;
+  const base = history[baseIdx];
+
+  // Only items carrying a REAL scraped market price (from a prices.json load,
+  // a live scrape, or an import) belong on the movers list. Everything else —
+  // gamedata-default placeholders, bolts, skip/bury junk — has no market data.
+  const scrapedKeys = (window.getScrapedPriceKeys && window.getScrapedPriceKeys()) || null;
+  const useScraped = !!(scrapedKeys && scrapedKeys.size);
+  const junkSet = ecoJunkSet();
+
+  const rows = React.useMemo(() => {
+    if (!latest || !base || latest === base) return [];
+    const statics = (window.GameData && window.GameData.STATIC_PRICES) || {};
+    const lastIdx = history.length - 1;
+    // Baseline lookup that tolerates sparse history: if the chosen baseline
+    // snapshot has no value for an item (a purged ghost, or a snapshot older
+    // than the item), walk to the nearest snapshot that does — so the item
+    // shows its real move instead of vanishing from the list.
+    const baseValFor = (k) => {
+      if (baseMode === 'first'){
+        for (let i = 0; i < lastIdx; i++){ const v = history[i].prices[k]; if (typeof v === 'number' && v > 0) return v; }
+      } else {
+        for (let i = lastIdx - 1; i >= 0; i--){ const v = history[i].prices[k]; if (typeof v === 'number' && v > 0) return v; }
+      }
+      return null;
+    };
+    const out = [];
+    for (const [k, price] of Object.entries(latest.prices)){
+      if (useScraped && !scrapedKeys.has(k)) continue;   // no scraped price → drop
+      if (junkSet.has(k)) continue;                      // skip/bury junk → drop
+      if (ECON_EXCLUDE.has(k)) continue;
+      if (k in statics) continue;
+      const b = baseValFor(k);
+      if (typeof b !== 'number' || b <= 0) continue;
+      const delta = price - b;
+      const pct = delta / b;
+      const series = history.map(s => s.prices[k]).filter(v => typeof v === 'number' && v > 0);
+      out.push({ key:k, price, base:b, delta, pct, series });
+    }
+    return out;
+  }, [latest, base, history, baseMode, useScraped, useScraped ? scrapedKeys.size : 0]);
+
+  const movers = rows.filter(r => r.delta !== 0);
+  // Only real gainers in "gainers", only real fallers in "fallers" — show fewer
+  // than 3 rather than padding one column with moves of the wrong sign.
+  const gainers = movers.filter(r => r.delta > 0).sort((a,b)=>b.pct-a.pct).slice(0,3);
+  const losers  = movers.filter(r => r.delta < 0).sort((a,b)=>a.pct-b.pct).slice(0,3);
+
+  const filtered = rows.filter(r => {
+    if (!q) return true;
+    const s = q.toLowerCase();
+    return r.key.toLowerCase().includes(s) || ecoLabel(r.key).toLowerCase().includes(s);
+  });
+  const sorted = [...filtered].sort((a,b) => {
+    let v;
+    if (sortKey==='name')      v = ecoLabel(a.key).localeCompare(ecoLabel(b.key)) * -1;
+    else if (sortKey==='price') v = a.price - b.price;
+    else if (sortKey==='abs')   v = Math.abs(a.delta) - Math.abs(b.delta);
+    else                        v = Math.abs(a.pct) - Math.abs(b.pct);
+    return v * dir;
+  });
+  const sortBy = k => { if (sortKey===k) setDir(d=>-d); else { setSortKey(k); setDir(-1); } };
+
+  const captureNow = () => {
+    const before = (window.getPriceHistory ? window.getPriceHistory() : []).length;
+    window.recordPriceSnapshot && window.recordPriceSnapshot(Math.floor(Date.now()/1000));
+    const after = (window.getPriceHistory ? window.getPriceHistory() : []).length;
+    setTick(t=>t+1);
+    setFlash(after > before ? '✓ snapshot captured' : 'no price change since last snapshot');
+    setTimeout(()=>setFlash(''), 2600);
+  };
+  const clearHist = () => {
+    if (!window.confirm('Clear the entire price-history timeline? This cannot be undone.')) return;
+    window.clearPriceHistory && window.clearPriceHistory();
+    setTick(t=>t+1);
+  };
+
+  const fmtSignedGp = n => (n>0?'+':n<0?'−':'') + fmtK(Math.abs(n));
+  const fmtSignedPct = n => (n>0?'+':n<0?'−':'') + (Math.abs(n)*100).toFixed(Math.abs(n)<0.1?1:0) + '%';
+  const moveColor = n => n>0 ? 'var(--green)' : n<0 ? 'var(--red)' : 'var(--text-3)';
+
+  const span = (history.length>=2)
+    ? ecoRelTime(history[0].t).replace(' ago','') + ' span'
+    : '—';
+
+  const TH = ({k, label, right}) => (
+    <th className={right?'right':''} onClick={()=>sortBy(k)} style={{cursor:'pointer', userSelect:'none', whiteSpace:'nowrap', position:'sticky', top:0, background:'var(--bg-1)', zIndex:1}}>
+      {label} {sortKey===k ? (dir<0?'▼':'▲') : ''}
+    </th>
+  );
+
+  // ---- empty / low-data state ----
+  if (history.length < 2){
+    return (
+      <div className="scroll" style={{flex:1, overflow:'auto', minHeight:0}}>
+        <div className="h-strip"><span className="title">Economy · price movers</span>
+          <PriceAgeBadge />
+        </div>
+        <div style={{padding:'14px', display:'grid', gap:14}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10}}>
+            <MiniMetric k="Snapshots" v={history.length} />
+            <MiniMetric k="Items tracked" v={latest ? Object.keys(latest.prices).length : 0} />
+            <MiniMetric k="Captured" v={latest ? ecoRelTime(latest.t) : 'never'} />
+          </div>
+          <div style={{padding:'16px 16px', border:'1px dashed var(--border-2)', borderRadius:4,
+            background:'var(--bg-1)', fontFamily:'var(--mono)', fontSize:12, color:'var(--text-2)', lineHeight:1.7}}>
+            <div style={{color:'var(--text-1)', fontSize:13, marginBottom:6}}>The timeline is still warming up.</div>
+            Price history accumulates one snapshot at a time. Every market sync, full
+            scrape, or <code>prices.json</code> import drops a new dated point here —
+            then this tab highlights which items moved the most between any two of them.
+            <div style={{marginTop:10, color:'var(--text-3)'}}>
+              Sync or import again later (Settings tab) to build the series, or grab a
+              manual snapshot of the prices loaded right now:
+            </div>
+            <div style={{marginTop:12, display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+              <button className="btn primary" onClick={captureNow}>＋ Capture snapshot now</button>
+              {flash && <span style={{color:'var(--teal)', fontSize:11}}>{flash}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minHeight:0}}>
+      <div className="h-strip"><span className="title">Economy · price movers</span>
+        <span style={{display:'flex', alignItems:'center', gap:10}}>
+          {flash && <span style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--teal)'}}>{flash}</span>}
+          <PriceAgeBadge />
+        </span>
+      </div>
+
+      <div style={{padding:'12px 14px', display:'grid', gap:14}}>
+        {/* header metrics */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10}}>
+          <MiniMetric k="Snapshots" v={history.length} />
+          <MiniMetric k="Items tracked" v={rows.length} />
+          <MiniMetric k="Moved" v={`${movers.length} / ${rows.length}`} />
+          <MiniMetric k="Latest" v={ecoRelTime(latest.t)} />
+        </div>
+
+        {/* baseline + capture controls */}
+        <div style={{display:'flex', gap:12, alignItems:'center', flexWrap:'wrap'}}>
+          <div style={{fontFamily:'var(--mono)', fontSize:10, textTransform:'uppercase', letterSpacing:'.06em', color:'var(--text-3)'}}>Compare latest vs</div>
+          <div className="seg">
+            <button className={baseMode==='prev'?'active':''} onClick={()=>setBaseMode('prev')}>Previous</button>
+            <button className={baseMode==='first'?'active':''} onClick={()=>setBaseMode('first')}>First</button>
+          </div>
+          <span style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-4)'}}>
+            {base ? `baseline ${ecoRelTime(base.t)}` : ''}
+          </span>
+          <span style={{flex:1}}></span>
+          <button className="btn" onClick={captureNow}>＋ Snapshot now</button>
+          <button className="btn" onClick={clearHist} title="Clear timeline" style={{color:'var(--text-3)'}}>Clear</button>
+        </div>
+
+        {/* top gainers / losers */}
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+          {[['Top gainers', gainers, 'var(--green)'], ['Top fallers', losers, 'var(--red)']].map(([title, list, col]) => (
+            <div key={title} style={{border:'1px solid var(--border-1)', borderRadius:4, background:'var(--bg-1)', overflow:'hidden'}}>
+              <div style={{padding:'7px 10px', borderBottom:'1px solid var(--border-1)', fontFamily:'var(--mono)', fontSize:10,
+                textTransform:'uppercase', letterSpacing:'.06em', color:'var(--text-3)'}}>{title}</div>
+              <div style={{padding:'4px 0'}}>
+                {list.length===0 && <div style={{padding:'8px 10px', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-4)'}}>no change</div>}
+                {list.map(r => (
+                  <div key={r.key} style={{display:'flex', alignItems:'center', gap:8, padding:'5px 10px'}}>
+                    <span style={{flex:1, fontFamily:'var(--mono)', fontSize:11, color:'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{ecoLabel(r.key)}</span>
+                    <EcoSparkline series={r.series} color={col} w={56} h={18}/>
+                    <span style={{fontFamily:'var(--mono)', fontSize:11, color:col, fontWeight:600, minWidth:48, textAlign:'right'}}>{fmtSignedPct(r.pct)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* search */}
+        <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+          <input className="input" value={q} onChange={e=>setQ(e.target.value)} placeholder="filter items…"
+            style={{maxWidth:240, fontFamily:'var(--mono)', fontSize:11}}/>
+        </div>
+      </div>
+
+      {/* movers table — scrollable list */}
+      <div ref={useNativeWheelRef} className="scroll scroll-vis" style={{flex:1, overflow:'auto', minHeight:0, padding:'0 14px 16px'}}>
+        <table className="dense" style={{width:'100%'}}>
+          <thead>
+            <tr>
+              <TH k="name"  label="Item" />
+              <th className="right" style={{position:'sticky', top:0, background:'var(--bg-1)', zIndex:1}}>Trend</th>
+              <TH k="price" label="Price" right />
+              <th className="right" style={{position:'sticky', top:0, background:'var(--bg-1)', zIndex:1}}>Was</th>
+              <TH k="abs"   label="Δ gp" right />
+              <TH k="pct"   label="Δ %" right />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(r => (
+              <tr key={r.key}>
+                <td style={{color:'var(--text-1)'}}>{ecoLabel(r.key)}</td>
+                <td className="right"><div style={{display:'flex', justifyContent:'flex-end'}}><EcoSparkline series={r.series} color={moveColor(r.delta)}/></div></td>
+                <td className="right" style={{fontFamily:'var(--mono)', color:'var(--text-1)'}}>{fmtK(r.price)}</td>
+                <td className="right" style={{fontFamily:'var(--mono)', color:'var(--text-4)'}}>{fmtK(r.base)}</td>
+                <td className="right" style={{fontFamily:'var(--mono)', color:moveColor(r.delta)}}>{r.delta===0?'—':fmtSignedGp(r.delta)}</td>
+                <td className="right" style={{fontFamily:'var(--mono)', color:moveColor(r.delta), fontWeight:600}}>{r.delta===0?'—':fmtSignedPct(r.pct)}</td>
+              </tr>
+            ))}
+            {sorted.length===0 && (
+              <tr><td colSpan={6} style={{padding:'16px 0', textAlign:'center', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-4)'}}>
+                {rows.length===0 ? 'No overlapping items between these two snapshots.' : 'No items match your filter.'}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// =======================================================================
 // WORKBENCH — A (primary view), with tabs for Stats / Compare / Loot
 // =======================================================================
 const LS_INPUT = 'sim_input_v3';
@@ -3114,6 +3492,15 @@ function CombatWorkbench(){
         if (v == null) delete map[id]; else map[id] = v;
         return {...s, overheadByMonster:map, overheadSec: (v == null ? null : v)};
       }
+      // Per-monster random-jewel spot: 'overground' (nature talisman) or
+      // 'underground' (chaos talisman). Default underground; stored per monster.
+      if (k === '__setJewelSpot'){
+        const id = s.monster?.id;
+        if (!id) return s;
+        const map = {...(s.jewelSpotByMonster||{})};
+        if (v == null || v === 'underground') delete map[id]; else map[id] = v;
+        return {...s, jewelSpotByMonster:map};
+      }
       // Apply a duel-snapshot loadout to the live editor.
       if (k === '__applySetup'){
         return writeThrough({...s, ...v,
@@ -3245,6 +3632,8 @@ function CombatWorkbench(){
               {k:'trip',    label:'Trip',    sub:`${result.trip&&isFinite(result.trip.killsPerTrip)?Math.floor(result.trip.killsPerTrip)+' k/trip':'—'}`, onClick:()=>setTab('trip')},
               {k:'cannon',  label:'Cannon',  sub: (result.cannon && !result.cannon.idle) ? `${fmtK(result.cannon.ballsPerHour)} balls/hr` : ((input.cannonByMonster||{})[input.monster?.id]?.enabled ? 'idle' : 'off'), onClick:()=>setTab('cannon')},
               {k:'duel',    label:'Duel',    sub:`${(input.duelSetups||[]).length} setups`, onClick:()=>setTab('duel')},
+              {k:'planner', label:'Planner', sub:'train order', onClick:()=>setTab('planner')},
+              {k:'economy', label:'Economy', sub:'price movers', onClick:()=>setTab('economy')},
               {k:'settings',label:'Settings',sub:(() => { const i = priceAgeInfo(); return i.hours !== null && i.hours > 24 ? `⚠ prices ${i.label}` : 'prices · import'; })(), onClick:()=>setTab('settings')},
             ].map(t => {
               const isEquip = t.k.startsWith('equip_');
@@ -3275,8 +3664,10 @@ function CombatWorkbench(){
           {tab==='equip_ranged' && <EquipmentPane type="ranged" input={input} set={set} hiddenTiers={hiddenTiers}/>}
           {tab==='equip_magic'  && <EquipmentPane type="magic"  input={input} set={set} hiddenTiers={hiddenTiers}/>}
           {tab==='compare'      && <ComparePane input={simInput} set={set}/>}
+          {tab==='planner'      && window.PlannerPane && <window.PlannerPane input={simInput} set={set}/>}
           {tab==='duel'         && <DuelPane input={simInput} set={set}/>}
           {tab==='loot'         && <LootPane input={simInput} result={result} lootPrefs={lootPrefs} setLootPref={setLootPref} setLootPrefsBulk={setLootPrefsBulk} set={set}/>}
+          {tab==='economy'      && <EconomyPane/>}
           {tab==='trip'         && <TripPane input={input} result={result} setTrip={setTrip} setCannon={setCannon}/>}
           {tab==='cannon'       && <CannonPane input={input} simInput={simInput} result={result} setCannon={setCannon}/>}
           {tab==='settings'     && <SettingsPane input={simInput} hiddenTiers={hiddenTiers} setHiddenTiers={setHiddenTiers}/>}

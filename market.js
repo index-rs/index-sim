@@ -7,6 +7,30 @@
 
   const BASE = 'https://markets.lostcity.rs';
 
+  // ---- Scraped-price key registry ----------------------------------------
+  // Tracks which item keys carry a REAL scraped market price — i.e. they came
+  // from a prices.json load, a live market scrape, or a manual import, NOT from
+  // a gamedata default/static placeholder. The Economy tab uses this to show
+  // only genuinely market-priced items. Persisted so the set survives reloads
+  // where the file/remote fetch might not re-run.
+  const SCRAPED_KEYS_LS = 'sim_scraped_keys_v1';
+  const _scrapedKeys = new Set();
+  try {
+    const seed = JSON.parse(localStorage.getItem(SCRAPED_KEYS_LS) || '[]');
+    if (Array.isArray(seed)) seed.forEach(k => _scrapedKeys.add(k));
+  } catch(_){}
+  function noteScrapedKeys(obj){
+    if (!obj || typeof obj !== 'object') return;
+    let added = false;
+    for (const k of Object.keys(obj)){
+      if (k.charAt(0) === '_') continue;            // skip _scraped_at etc.
+      if (typeof obj[k] !== 'number' || obj[k] <= 0) continue;
+      if (!_scrapedKeys.has(k)){ _scrapedKeys.add(k); added = true; }
+    }
+    if (added){ try { localStorage.setItem(SCRAPED_KEYS_LS, JSON.stringify([..._scrapedKeys])); } catch(_){} }
+  }
+  window.getScrapedPriceKeys = () => _scrapedKeys;
+
   // Map internal gamedata item keys → market URL slugs
   // Add entries here as more items are needed.
   const SLUG_MAP = {
@@ -65,6 +89,9 @@
     cow_hide:        'cowhide',
     body_talisman:   'body_talisman',
     air_talisman:    'air_talisman',
+    // jewel-table talismans (now market-scraped, not fixed-price)
+    chaos_talisman:  'chaos_talisman',
+    nature_talisman: 'nature_talisman',
     // armour / weapons (high value drops worth tracking)
     rune_full_helm:  'rune_full_helm',
     rune_med_helm:   'rune_med_helm',
@@ -216,6 +243,7 @@
     const now = new Date();
     window._marketLastSync  = now.toLocaleTimeString();
     window._marketSynced    = (window._marketSynced ?? 0) + synced;
+    if (synced > 0) recordPriceSnapshot(Math.floor(now.getTime()/1000));
 
     console.log(`[market] sync done: ${synced} updated, ${failed} failed`, results);
     onDone && onDone({ synced, failed, results });
@@ -259,8 +287,175 @@
         keys.add(drop.key);
       }
     }
+    // Always-scrape extras that aren't ordinary loot-table keys: the recoil ring
+    // (a supply cost) and the jewel-table talismans (overground/underground).
+    ['ring_of_recoil','chaos_talisman','nature_talisman'].forEach(k => keys.add(k));
     return [...keys];
   }
+
+  // ---- Price-history snapshots -------------------------------------------
+  // The app otherwise only ever holds ONE price set (the latest). To track
+  // change over time we append a compact snapshot of the live ITEM_PRICES to
+  // localStorage every time prices are applied (scrape / import / live sync /
+  // restore). The Economy tab reads these back to highlight the biggest movers.
+  const HISTORY_KEY = 'sim_price_history_v1';
+  const HISTORY_CAP = 160;          // keep the last N snapshots
+
+  function loadPriceHistory(){
+    try { const a = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      return Array.isArray(a) ? a : []; } catch(_){ return []; }
+  }
+
+  // Build a {key:price} map of the current prices, dropping meta keys (_foo)
+  // and non-positive values. Returns null if there is nothing to record.
+  function currentPriceMap(){
+    const src = window.GameData && window.GameData.ITEM_PRICES;
+    if (!src) return null;
+    const out = {};
+    for (const [k,v] of Object.entries(src)){
+      if (k.charAt(0) === '_') continue;
+      if (typeof v === 'number' && v > 0) out[k] = v;
+    }
+    return Object.keys(out).length ? out : null;
+  }
+
+  function sameMap(a, b){
+    if (!a || !b) return false;
+    const ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    for (const k of ka) if (a[k] !== b[k]) return false;
+    return true;
+  }
+
+  // Record a snapshot. tsOpt (unix seconds) overrides the timestamp; otherwise
+  // GameData.scrapedAt, else now. Dedupes: a snapshot sharing the previous
+  // entry's timestamp replaces it; an identical price map is skipped.
+  function recordPriceSnapshot(tsOpt){
+    const prices = currentPriceMap();
+    if (!prices) return;
+    let t = (typeof tsOpt === 'number' && tsOpt > 0) ? Math.floor(tsOpt)
+          : (typeof window.GameData?.scrapedAt === 'number' ? window.GameData.scrapedAt
+          : Math.floor(Date.now()/1000));
+    const hist = loadPriceHistory();
+    const last = hist[hist.length - 1];
+    if (last){
+      if (sameMap(last.prices, prices)){
+        // No price change — just keep the freshest timestamp on the last entry.
+        if (t > last.t){ last.t = t; save(hist); }
+        return;
+      }
+      if (last.t === t){ hist[hist.length - 1] = { t, prices }; save(hist); return; }
+    }
+    hist.push({ t, prices });
+    while (hist.length > HISTORY_CAP) hist.shift();
+    save(hist);
+    function save(h){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch(_){} }
+  }
+
+  function clearPriceHistory(){ try { localStorage.removeItem(HISTORY_KEY); } catch(_){} }
+
+  // Merge the committed, shipped price history (price-history.json, sitting next
+  // to the HTML) into the visitor's local timeline. This is what lets a brand-new
+  // visitor see a populated Economy tab immediately, instead of having to return
+  // across multiple price pushes for the per-browser timeline to fill in. Each
+  // shared snapshot is keyed by its timestamp; we add only the ones the visitor
+  // doesn't already have, then re-sort and cap. The visitor's own scrapes/imports
+  // are preserved and interleaved by time.
+  async function loadSharedHistory(){
+    try {
+      const r = await fetch('price-history.json');
+      if (!r.ok) return;
+      const shared = await r.json();
+      if (!Array.isArray(shared) || !shared.length) return;
+      const hist = loadPriceHistory();
+      const byT = new Map(hist.map(h => [h.t, h]));
+      let added = 0;
+      for (const snap of shared){
+        if (!snap || typeof snap.t !== 'number' || !snap.prices) continue;
+        if (!byT.has(snap.t)){ byT.set(snap.t, { t: snap.t, prices: snap.prices }); added++; }
+      }
+      if (added){
+        const merged = [...byT.values()].sort((a,b)=>a.t-b.t);
+        while (merged.length > HISTORY_CAP) merged.shift();
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(merged)); } catch(_){}
+      }
+    } catch(_){}
+  }
+
+  // One-time cleanup of placeholder prices that leaked into the FIRST (oldest)
+  // snapshot before real scrapes existed. v1 stripped the fixed talisman/recoil
+  // values; v2 strips the gamedata-default placeholders for items whose real
+  // market price arrived later (granite shield, super antipoison, cannonball,
+  // ring of recoil) so the Economy tab doesn't show a bogus placeholder→market
+  // jump on them. Each migration runs once (guarded by its own flag).
+  const HISTORY_SANITIZED_KEY = 'sim_price_history_sanitized_v1';
+  const HISTORY_SANITIZED_V2_KEY = 'sim_price_history_sanitized_v2';
+  const NON_MARKET_FIXED = { chaos_talisman: 500, nature_talisman: 15000, ring_of_recoil: 1500 };
+  const NON_MARKET_BOGUS_KEYS = ['granite_shield','super_antipoison','mcannonball','ring_of_recoil'];
+  const HISTORY_SANITIZED_V3_KEY = 'sim_price_history_sanitized_v3';
+  const HISTORY_SANITIZED_V4_KEY = 'sim_price_history_sanitized_v4';
+  // Exact static placeholder values that leaked into history for these non-market
+  // items (they were never really worth this) — purge every matching point so the
+  // Economy tab stops showing a bogus swing. Runs once per browser.
+  const NON_MARKET_STATIC = { granite_shield: 35000, super_antipoison: 760, mcannonball: 180, cannonball: 180, chaos_talisman: 500 };
+  function sanitizePriceHistory(){
+    try {
+      const hist = loadPriceHistory();
+      let changed = false;
+      if (!localStorage.getItem(HISTORY_SANITIZED_KEY)){
+        for (const snap of hist){
+          if (!snap || !snap.prices) continue;
+          for (const [k, badVal] of Object.entries(NON_MARKET_FIXED)){
+            if (snap.prices[k] === badVal){ delete snap.prices[k]; changed = true; }
+          }
+        }
+        localStorage.setItem(HISTORY_SANITIZED_KEY, '1');
+      }
+      if (!localStorage.getItem(HISTORY_SANITIZED_V2_KEY)){
+        if (hist.length){
+          // oldest snapshot = minimum timestamp
+          let oldest = hist[0];
+          for (const s of hist) if (s && s.t < oldest.t) oldest = s;
+          if (oldest && oldest.prices){
+            for (const k of NON_MARKET_BOGUS_KEYS){
+              if (k in oldest.prices){ delete oldest.prices[k]; changed = true; }
+            }
+          }
+        }
+        localStorage.setItem(HISTORY_SANITIZED_V2_KEY, '1');
+      }
+      if (!localStorage.getItem(HISTORY_SANITIZED_V3_KEY)){
+        for (const snap of hist){
+          if (!snap || !snap.prices) continue;
+          for (const [k, badVal] of Object.entries(NON_MARKET_STATIC)){
+            if (snap.prices[k] === badVal){ delete snap.prices[k]; changed = true; }
+          }
+        }
+        localStorage.setItem(HISTORY_SANITIZED_V3_KEY, '1');
+      }
+      if (!localStorage.getItem(HISTORY_SANITIZED_V4_KEY)){
+        // Re-run the static-placeholder purge. Earlier builds re-injected these
+        // ghosts via restorePersistedPrices (the persisted cache carries stale
+        // gamedata defaults) AFTER V3 had already cleaned them, so a one-shot V3
+        // guard wasn't enough. The re-injection is now fixed at the source, so a
+        // single extra purge clears the timeline for good.
+        for (const snap of hist){
+          if (!snap || !snap.prices) continue;
+          for (const [k, badVal] of Object.entries(NON_MARKET_STATIC)){
+            if (snap.prices[k] === badVal){ delete snap.prices[k]; changed = true; }
+          }
+        }
+        localStorage.setItem(HISTORY_SANITIZED_V4_KEY, '1');
+      }
+      if (changed) localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+    } catch(_){}
+  }
+
+  window.getPriceHistory    = loadPriceHistory;
+  window.recordPriceSnapshot = recordPriceSnapshot;
+  window.clearPriceHistory  = clearPriceHistory;
+  window.loadSharedHistory  = loadSharedHistory;
+  window.sanitizePriceHistory = sanitizePriceHistory;
 
   // Apply a {key: price} + {key: alch} result set to GameData and persist
   // to localStorage so it survives reloads / standalone re-opens.
@@ -270,6 +465,7 @@
     for (const [k,v] of Object.entries(prices || {})){
       if (typeof v === 'number' && v > 0){ window.GameData.ITEM_PRICES[k] = v; n++; }
     }
+    noteScrapedKeys(prices);
     // Persist scrape timestamp if the incoming prices carry one.
     if (prices && typeof prices._scraped_at === 'number'){
       window.GameData.scrapedAt = prices._scraped_at;
@@ -285,6 +481,8 @@
       localStorage.setItem('sim_prices_v1', JSON.stringify(window.GameData.ITEM_PRICES));
       localStorage.setItem('sim_alch_v1',   JSON.stringify(window.GameData.ALCH_VALUES || {}));
     } catch(_){}
+    // Capture this state for the price-history timeline.
+    recordPriceSnapshot(prices && typeof prices._scraped_at === 'number' ? prices._scraped_at : undefined);
     return n;
   }
 
@@ -334,6 +532,13 @@
       const ts = localStorage.getItem('sim_scraped_at_v1');
       if (ts) window.GameData.scrapedAt = parseInt(ts, 10);
       if (typeof window.GameData.recalcGemEV === 'function') window.GameData.recalcGemEV();
+      // NOTE: deliberately does NOT record a price-history snapshot. sim_prices_v1
+      // is the FULL ITEM_PRICES map, which still carries stale gamedata-default
+      // placeholders for any item not in the user's last real scrape (granite
+      // shield 35k, chaos talisman 500, super antipoison 760, cannonball 180…).
+      // Recording it here re-injected those ghosts every load, showing a bogus
+      // "static → market" jump in the Economy tab. Timeline points now come only
+      // from real scraped data: the prices.json auto-load, a live sync, or import.
     } catch(_){}
   }
 
@@ -365,17 +570,36 @@
           if (typeof v === 'number' && v > 0){ dest[k] = v; n++; }
         }
         if (n > 0) console.log(`[market] auto-loaded ${n} ${f.label} from ${f.url}`);
+        if (f.target === 'ITEM_PRICES') noteScrapedKeys(data);
+        // Pick up the scrape timestamp shipped inside prices.json.
+        if (f.target === 'ITEM_PRICES' && typeof data._scraped_at === 'number'){
+          window.GameData.scrapedAt = data._scraped_at;
+          try { localStorage.setItem('sim_scraped_at_v1', String(data._scraped_at)); } catch(_){}
+        }
       } catch(_){}
     }
     // Recompute gem EV with new prices
     if (typeof window.GameData.recalcGemEV === 'function'){
       window.GameData.recalcGemEV();
     }
+    // Refresh the persisted cache from the canonical file, so next session's
+    // restorePersistedPrices shows these fresh values instead of stale defaults.
+    try {
+      localStorage.setItem('sim_prices_v1', JSON.stringify(window.GameData.ITEM_PRICES));
+      localStorage.setItem('sim_alch_v1',   JSON.stringify(window.GameData.ALCH_VALUES || {}));
+    } catch(_){}
+    // Seed the timeline with the shared, committed history first, then record
+    // the freshly-loaded baseline on top of it.
+    await loadSharedHistory();
+    recordPriceSnapshot(window.GameData.scrapedAt);
   }
 
   // Run after a short delay so GameData is guaranteed to be initialised
   setTimeout(autoLoadPriceFiles, 500);
   window.autoLoadPriceFiles = autoLoadPriceFiles;
+
+  // One-time history cleanup, after the price files have loaded + recorded.
+  setTimeout(sanitizePriceHistory, 800);
 
   // Python fallback snippet — shown in UI if CORS blocks
   window.marketPythonSnippet = `
