@@ -970,7 +970,7 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
           {(ct==='melee' || ct==='ranged') && (() => {
             // Special-attack weapon: a 2nd weapon brought only to spec on cooldown.
             const specOpts = ct==='melee'
-              ? [['none','None'],['dragon_dagger','Dragon dagger (DDS)'],['dragon_longsword','Dragon longsword'],['dragon_mace','Dragon mace'],['dragon_halberd','Dragon halberd']]
+              ? [['none','None'],['dragon_dagger','Dragon dagger'],['dragon_dagger_p','Dragon dagger (p)'],['dragon_longsword','Dragon longsword'],['dragon_mace','Dragon mace'],['dragon_halberd','Dragon halberd']]
               : [['none','None'],['magic_shortbow','Magic shortbow'],['magic_longbow','Magic longbow']];
             const dbaOn = ct==='melee' && (input.boosts||[]).includes('dba_spec');
             const cur0 = input.specWeapon || 'none';
@@ -2063,8 +2063,8 @@ function TripPane({input, result, setTrip, setCannon}){
             Single-dose potions (drop vials)
           </label>
           {t.singleDose
-            ? <NumField label="Doses per potion type" v={t.potionDoses??4} onChange={v=>setTrip({potionDoses:Math.max(0,v)})} />
-            : <NumField label="Vials per type (4-dose)" v={t.potionSets??1} onChange={v=>setTrip({potionSets:Math.max(0,v)})} />}
+            ? <NumField label="Doses per potion type" min={0} v={t.potionDoses??4} onChange={v=>setTrip({potionDoses:Math.max(0,v)})} />
+            : <NumField label="Vials per type (4-dose)" min={0} v={t.potionSets??1} onChange={v=>setTrip({potionSets:Math.max(0,v)})} />}
           {trip && (
             <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
               {trip.slots.potionTypes
@@ -2200,7 +2200,7 @@ function TripPane({input, result, setTrip, setCannon}){
             <Toggle label="DBA restore potion" subOn="1 slot — restores att/def" subOff="str boost only (no restore)" color="violet"
                     value={t.dbaRestore!==false} onChange={v=>setTrip({dbaRestore:v})} />
           )}
-          {ct==='magic' && <NumField label="Combat rune slots" v={t.runeSlots??2} onChange={v=>setTrip({runeSlots:Math.max(0,v)})} />}
+          {ct==='magic' && <NumField label="Combat rune slots" min={0} v={t.runeSlots??2} onChange={v=>setTrip({runeSlots:Math.max(0,v)})} />}
         </div>
       </div>
 
@@ -3903,8 +3903,8 @@ function PrayerOptions({t, setTrip, result}){
       {mode==='potions' && (
         <>
           {single
-            ? <NumField label="Prayer-pot doses" v={t.prayerPotionDoses ?? t.potionDoses ?? 4} onChange={v=>setTrip({prayerPotionDoses:Math.max(0,v)})} />
-            : <NumField label="Prayer-pot vials (4-dose)" v={t.prayerPotionSets ?? t.potionSets ?? 1} onChange={v=>setTrip({prayerPotionSets:Math.max(0,v)})} />}
+            ? <NumField label="Prayer-pot doses" min={0} v={t.prayerPotionDoses ?? t.potionDoses ?? 4} onChange={v=>setTrip({prayerPotionDoses:Math.max(0,v)})} />
+            : <NumField label="Prayer-pot vials (4-dose)" min={0} v={t.prayerPotionSets ?? t.potionSets ?? 1} onChange={v=>setTrip({prayerPotionSets:Math.max(0,v)})} />}
           <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
             {trip.prayerSlots||0} slot{trip.prayerSlots===1?'':'s'} · ~{fmtK((trip.prayerCostPerKill||0)*result.effectiveKph)} gp/hr
             {trip.bound==='prayer' ? <span style={{color:'var(--amber)'}}> · prayer-bound — banks early</span> : ''}
@@ -3938,7 +3938,7 @@ function PrayerOptions({t, setTrip, result}){
       )}
       {mode==='altar' && (
         <>
-          <NumField label="Altar round-trip (sec)" v={t.altarSeconds ?? 30} step={5} onChange={v=>setTrip({altarSeconds:Math.max(0,v)})} />
+          <NumField label="Altar round-trip (sec)" min={0} v={t.altarSeconds ?? 30} step={5} onChange={v=>setTrip({altarSeconds:Math.max(0,v)})} />
           <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
             Recharge every {fmtInt(trip.killsPerAltar)} kills (pool {trip.prayerPool}) ·
             ~{Math.round((trip.altarSecPerKill||0)*result.effectiveKph/60)} min/hr lost · no potions, no gp
@@ -4103,11 +4103,27 @@ function DBAInfo({input}){
   );
 }
 
-function NumField({label, v, step=1, onChange}){
+function NumField({label, v, step=1, min=1, onChange}){
+  // Keep a local draft string so the field can be momentarily empty while
+  // editing (backspacing the last digit). A controlled value={number} would
+  // coerce "" back to 0 and trap a sticky zero. Commit valid numbers live;
+  // fall back to `min` only when the field is left empty on blur.
+  const [draft, setDraft] = React.useState(null);
+  const shown = draft != null ? draft : String(v);
   return (
     <div className="field">
       <label>{label}</label>
-      <input className="input" type="number" step={step} value={v} onChange={e=>onChange(+e.target.value)} />
+      <input className="input" type="number" step={step} value={shown}
+        onChange={e=>{
+          const raw = e.target.value;
+          setDraft(raw);
+          if (raw !== '' && raw !== '-'){ const n = parseFloat(raw); if (isFinite(n)) onChange(n); }
+        }}
+        onBlur={e=>{
+          const raw = e.target.value;
+          if (raw === '' || raw === '-' || !isFinite(parseFloat(raw))) onChange(min);
+          setDraft(null);
+        }} />
     </div>
   );
 }
