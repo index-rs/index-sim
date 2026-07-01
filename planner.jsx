@@ -178,6 +178,10 @@
     const [metric, setMetric] = useState('xph');
     const [futureWeapons, setFutureWeapons] = useState(!!c0.futureWeapons);
     const [lockGear, setLockGear] = useState(!!c0.lockGear);
+    // Pause recomputation to save cycles when you're not actively planning. The
+    // shown plan freezes; `stale` flags that inputs drifted since it was built.
+    const [paused, setPaused] = useState(!!c0.paused);
+    const [stale, setStale] = useState(false);
     // Sustained-boosts toggle is shared with the melee tab's "Avg over session"
     // toggle — both read/write the same input.sustained so flipping one flips both.
     const sustained = !!base.sustained;
@@ -214,8 +218,8 @@
       setPoolByType(nbt);
     };
 
-    useEffect(() => { saveCfg({ metric, futureWeapons, lockGear, sustained, targets:userTargets, locked, startXp:startXpUser, poolByType }); },
-      [metric, futureWeapons, lockGear, sustained, userTargets, locked, startXpUser, poolByType]);
+    useEffect(() => { saveCfg({ metric, futureWeapons, lockGear, sustained, paused, targets:userTargets, locked, startXp:startXpUser, poolByType }); },
+      [metric, futureWeapons, lockGear, sustained, paused, userTargets, locked, startXpUser, poolByType]);
 
     // relevant skills + effective targets. A locked skill freezes at its current
     // level (target = current) and is excluded from training.
@@ -251,9 +255,12 @@
     const planFirst = useRef(true);
     useEffect(() => {
       if (planFirst.current){ planFirst.current = false; return; }
-      const id = setTimeout(() => setPlan(computePlan()), 180);
+      // Paused: skip the recompute and just flag the shown plan as stale.
+      if (paused){ setStale(true); return; }
+      const id = setTimeout(() => { setPlan(computePlan()); setStale(false); }, 180);
       return () => clearTimeout(id);
-    }, [base, metric, JSON.stringify(targets), JSON.stringify(startXp), JSON.stringify(pool), futureWeapons, lockGear, sustained]);
+    }, [base, metric, JSON.stringify(targets), JSON.stringify(startXp), JSON.stringify(pool), futureWeapons, lockGear, sustained, paused]);
+    const recomputeNow = () => { setPlan(computePlan()); setStale(false); };
 
     const mm = metricMeta(metric);
 
@@ -291,6 +298,15 @@
                 <Toggle on={sustained} onChange={v => set && set('sustained', v)} label="Avg over session" />
               </div>
               <Toggle on={lockGear} onChange={setLockGear} label="Only current gear" />
+              <div style={{display:'flex', gap:8, alignItems:'center'}}>
+                <Toggle on={!paused} onChange={live => setPaused(!live)} label={paused ? 'Calc paused' : 'Live calc'} />
+                {paused && (
+                  <button className={'btn' + (stale ? ' primary' : '')} onClick={recomputeNow}
+                    title="Recompute the plan once from the current inputs">
+                    Recompute{stale ? ' •' : ''}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

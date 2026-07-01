@@ -62,8 +62,8 @@
     leather_body:     { name:'Leather body',      magAtt:-2, rngAtt:2, stabDef:8,  slashDef:9,  crushDef:10, magDef:4, rngDef:9,  alch:A(21) },
     // — Magic —
     splitbark_body:   { name:'Splitbark body',    magAtt:8, rngAtt:-10, stabDef:36, slashDef:26, crushDef:42, magDef:15, alch:A(45000) },
-    wizard_robe_top:  { name:'Wizard robe top',    magAtt:3, magDef:3, alch:A(15) },
-    monk_robe_top:    { name:"Monk's robe top",    prayer:6, alch:A(0) },
+    wizard_robe_top:  { name:'Wizard robe (top)',    magAtt:3, magDef:3, alch:A(15) },
+    monk_robe_top:    { name:"Monk's robe (top)",    prayer:6, alch:A(0) },
   };
 
   // ---- LEGS ----------------------------------------------------------
