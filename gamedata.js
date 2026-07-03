@@ -69,6 +69,7 @@ const P = {
   cow_hide:125, raw_beef:5, raw_chicken:5, feather:3,
   // druid items
   druidrobetop:420, druidrobebottom:420, vial_water:20, vial_empty:5,
+  staff_of_water:400,
   white_berries:350, unicorn_horn_dust:480, snape_grass:600,
   // shadow warrior
   weapon_poison:1100,
@@ -78,6 +79,9 @@ const P = {
   chocolate_cake:350,
   // granite shield — tradeable (sold at market, not alch); scraped key granite_shield
   granite_shield:35000,
+  // muddy key (chaos dwarf 7/128) — not market-traded; rough one-open EV of the
+  // lava-maze Muddy chest (runes/gems/coins), ignoring the trip to use it.
+  muddy_key:800,
   // average herb/gem EV (used for ~randomherb/~randomjewel)
   _randomherb_avg: 220,
 };
@@ -162,7 +166,7 @@ const ALCH = {
   adamant_spear:3120, adamant_kiteshield:2688,
   // mithril
   mithril_sq_shield:1170, mithril_kiteshield:1560, mithril_chainbody:2400,
-  mithril_sword:780, mithril_mace:630, mithril_axe:576, mithril_2h_sword:1560,
+  mithril_sword:780, mithril_mace:630, mithril_axe:312, mithril_2h_sword:1560,
   mithril_battleaxe:1248, mithril_spear:1200,
   // green d'hide armour (high_alch = floor(cost*0.6); body cost 7800, chaps 3900)
   dragonhide_body:4680, dragonhide_chaps:2340,
@@ -184,6 +188,8 @@ const ALCH = {
   fire_battlestaff:9000, magic_staff:192, staff_of_earth:900,
   plainstaff:48, druidrobetop:240, druidrobebottom:240,
   mithril_bar:720,
+  // ice giant / chaos dwarf / shadow warrior additions @274
+  mithril_longsword:780, iron_2h_sword:126, iron_platelegs:168, black_longsword:768,
 };
 
 // =====================================================================
@@ -255,8 +261,12 @@ const JEWEL_TABLE = [
   { name:'Uncut ruby',     lo:48, hi:56, price: P.uncut_ruby     ?? P.ruby     ?? 1050 },
   { name:'Uncut diamond',  lo:56, hi:58, price: P.uncut_diamond  ?? P.diamond  ?? 2200 },
   { name:'Rune javelin ×5',lo:58, hi:59, price: (P.rune_javelin ?? 150) * 5 },
-  { name:'Half key (loop)',lo:59, hi:60, price: P.keyhalf1 ?? 12000 },
-  { name:'Half key (tooth)',lo:60,hi:61, price: P.keyhalf2 ?? 12000 },
+  // Half keys: script item keyhalf1 = TOOTH half, keyhalf2 = LOOP half (per
+  // markets.lostcity.rs slugs). The scraper stores them as tooth_half_key /
+  // loop_half_key in the price table — the old P.keyhalf1 lookup never matched,
+  // silently falling back to 12000gp (~7-9× undervalued).
+  { name:'Half key (tooth)',lo:59, hi:60, price: P.tooth_half_key ?? 110000 },
+  { name:'Half key (loop)',lo:60,hi:61, price: P.loop_half_key ?? 81200 },
   // Talisman slot: nature talisman OVERGROUND, chaos talisman UNDERGROUND
   // (coordz>6400). @274. The sim can't read the player's plane, so it's a
   // per-monster toggle (default underground = chaos). setJewelSpot() swaps
@@ -295,8 +305,8 @@ let GEM_KEEP_FRAC_BASE = jewelKeepFrac(128);
 let GEM_KEEP_FRAC_ROW  = jewelKeepFrac(65);
 // expand list for the loot UI
 const JEWEL_EXPAND = JEWEL_TABLE.map(b => ({ name:b.name, weight:b.hi-b.lo, price:b.price, talisman:!!b.talisman }));
-// Mega-rare table is reachable from the jewel roll (rare sub-table) — show it.
-JEWEL_EXPAND.push({ name:'→ Mega-rare table (rune spear · dragon sq shield · dragon spear)', weight:1, price:0 });
+// The jewel roll's rarest band (roll 61) is gated by the Legends Quest — see
+// setLegendsComplete() below, which (re)builds the mega-rare entry into this list.
 
 // Rebuild jewel-table prices from current ITEM_PRICES (after a market sync)
 // and recompute the gem EVs. Keeps GameData.GEM_EV_* in sync with scraped data.
@@ -306,6 +316,9 @@ function recalcGemEV(){
     'Uncut emerald':  P.uncut_emerald  ?? P.emerald  ?? 680,
     'Uncut ruby':     P.uncut_ruby     ?? P.ruby     ?? 1050,
     'Uncut diamond':  P.uncut_diamond  ?? P.diamond  ?? 2200,
+    'Half key (loop)':  P.loop_half_key  ?? 81200,
+    'Half key (tooth)': P.tooth_half_key ?? 110000,
+    'Rune javelin ×5': (P.rune_javelin ?? 100) * 5,
   };
   JEWEL_TABLE.forEach(b => { if (priceFor[b.name] != null) b.price = priceFor[b.name]; });
   // Keep the talisman band's price live too (it's keyed, not in priceFor).
@@ -331,6 +344,8 @@ function recalcGemEV(){
   HERB_KEEP_FRAC = herbKeepFrac();
   // Casket value depends on gem + half-key prices — refresh it too.
   P.casket = casketValue();
+  // Ultra-rare table references the jewel EV + many scraped items — refresh after.
+  recalcUltraEV();
   return { GEM_EV_BASE, GEM_EV_ROW, GEM_EV_BASE_HIGH, GEM_EV_ROW_HIGH, HERB_EV, HERB_EV_HIGH };
 }
 
@@ -350,6 +365,40 @@ function setJewelSpot(spot){
   return CURRENT_JEWEL_SPOT;
 }
 
+// ---- Legends Quest gate on the jewel table's rarest band ------------
+// randomjewel roll 61 (1/128): if %legendsquest is complete (members only) it
+// rolls the MEGA-RARE table (rune spear / dragon sq shield / dragon spear)
+// instead of a talisman. Rolls 62-64 stay talisman either way. Verified
+// shared_droptables.rs2 @274:
+//   } else if ($random < 65) {
+//       if ($random < 62 & %legendsquest = ^legends_complete) { return (~megararetable); }
+//       ... talisman ...
+// Default ON — most established accounts have finished Legends (user choice).
+let LEGENDS_COMPLETE = true;
+function setLegendsComplete(v){
+  LEGENDS_COMPLETE = !!v;
+  // Drop any prior mega band, then set the talisman band's lower bound.
+  const mi = JEWEL_TABLE.findIndex(b => b.mega);
+  if (mi >= 0) JEWEL_TABLE.splice(mi, 1);
+  const band = JEWEL_TABLE.find(b => b.talisman);
+  if (band){
+    if (LEGENDS_COMPLETE){
+      band.lo = 62;                    // talisman now rolls 62..64 (3/128)
+      JEWEL_TABLE.push({ name:'→ Mega-rare (Legends): rune spear · dragon sq · dragon spear',
+                         mega:true, lo:61, hi:62, price: MEGA_EV });
+    } else {
+      band.lo = 61;                    // talisman rolls 61..64 (4/128); no mega
+    }
+  }
+  // Rebuild the loot-UI expand list from the current bands.
+  JEWEL_EXPAND.length = 0;
+  JEWEL_TABLE.forEach(b => JEWEL_EXPAND.push({
+    name:b.name, weight:b.hi-b.lo, price:b.price, talisman:!!b.talisman, mega:!!b.mega }));
+  recalcGemEV();
+  return LEGENDS_COMPLETE;
+}
+// (Normalized once at the end of this module, after ULTRA_TABLE etc. exist.)
+
 // ---- [proc,ultrarare_getitem] — random(128) -------------------------
 // Used by ~ultrarare drops. NOT affected by Ring of Wealth (separate path).
 // Includes recursion into randomjewel (20/128) and megararetable (15/128).
@@ -366,16 +415,46 @@ const ULTRA_TABLE = [
   { name:'Dragon med helm',  weight:1,  price: P.dragon_med_helm ?? 60000 },
   { name:'Rune kiteshield',  weight:1,  price: P.rune_kiteshield ?? 32000 },
   { name:'Coins ×3000',      weight:21, price: 3000 },
-  { name:'Half key (loop)',  weight:20, price: P.keyhalf1 ?? 12000 },
-  { name:'Half key (tooth)', weight:20, price: P.keyhalf2 ?? 12000 },
+  // keyhalf1 = tooth, keyhalf2 = loop (see JEWEL_TABLE note).
+  { name:'Half key (tooth)', weight:20, price: P.tooth_half_key ?? 110000 },
+  { name:'Half key (loop)',  weight:20, price: P.loop_half_key ?? 81200 },
   { name:'Runite bar',       weight:5,  price: P.runite_bar ?? 6500 },
   { name:'Dragonstone',      weight:2,  price: P.dragonstone ?? 16000 },
   { name:'Silver ore ×100',  weight:2,  price:(P.silver_ore??62)*100 },
   { name:'→ Random jewel',   weight:20, price: GEM_EV_BASE },
   { name:'→ Mega-rare table', weight:15, price: MEGA_EV },
 ];
-const ULTRARARE_EV = ULTRA_TABLE.reduce((s,r)=>s+r.weight*r.price,0) / 128;
+let ULTRARARE_EV = ULTRA_TABLE.reduce((s,r)=>s+r.weight*r.price,0) / 128;
 const ULTRA_EXPAND = ULTRA_TABLE.map(r => ({ name:r.name, weight:r.weight, price:r.price }));
+
+// Refresh ULTRA_TABLE prices from the live price table (after a market sync)
+// and recompute ULTRARARE_EV. Previously the ultra-rare EV was computed once at
+// load and never updated — scraped prices didn't flow through.
+function recalcUltraEV(){
+  const up = {
+    'Nature rune ×67': (P.naturerune??180)*67,
+    'Adamant javelin ×20': (P.adamant_javelin??50)*20,
+    'Death rune ×45': (P.deathrune??200)*45,
+    'Law rune ×45': (P.lawrune??240)*45,
+    'Rune arrow ×42': (P.rune_arrow??160)*42,
+    'Steel arrow ×150': (P.steel_arrow??18)*150,
+    'Rune 2h sword': P.rune_2h ?? 38000,
+    'Rune battleaxe': P.rune_battleaxe ?? 25000,
+    'Rune sq shield': P.rune_sq_shield ?? 21000,
+    'Dragon med helm': P.dragon_med_helm ?? 60000,
+    'Rune kiteshield': P.rune_kiteshield ?? 32000,
+    'Half key (loop)': P.loop_half_key ?? 81200,
+    'Half key (tooth)': P.tooth_half_key ?? 110000,
+    'Runite bar': P.runite_bar ?? 6500,
+    'Dragonstone': P.dragonstone ?? 16000,
+    'Silver ore ×100': (P.silver_ore??62)*100,
+    '→ Random jewel': GEM_EV_BASE,
+    '→ Mega-rare table': MEGA_EV,
+  };
+  ULTRA_TABLE.forEach(r => { if (up[r.name] != null) r.price = up[r.name]; });
+  ULTRA_EXPAND.forEach(e => { if (up[e.name] != null) e.price = up[e.name]; });
+  ULTRARARE_EV = ULTRA_TABLE.reduce((s,r)=>s+r.weight*r.price,0) / 128;
+}
 
 // ---- drop helpers ---------------------------------------------------
 // gemDrop: the gem roll has chance C of triggering. It then yields the
@@ -405,11 +484,11 @@ function ultrarareDrop(chance){
     price:ULTRARARE_EV, tag:'ultrarare', _expand: ULTRA_EXPAND };
 }
 const w = (weight, total=128) => parseFloat((weight/total).toFixed(5));
-function d(name, weight, qty, itemId){
+function d(name, weight, qty, itemId, total=128){
   const id = itemId ?? name.toLowerCase().replace(/[\s×\d]+$/,'').replace(/\s/g,'_').replace(/[^a-z0-9_]/g,'');
-  return { name, key:id, chance:w(weight), qtyAvg:qty, price:gp(id), alchValue:ALCH[id]??0 };
+  return { name, key:id, chance:w(weight,total), qtyAvg:qty, price:gp(id), alchValue:ALCH[id]??0 };
 }
-function coins(weight, qty){ return { name:'Coins', key:'coins', chance:w(weight), qtyAvg:qty, price:1, alchValue:0 }; }
+function coins(weight, qty, total=128){ return { name:'Coins', key:'coins', chance:w(weight,total), qtyAvg:qty, price:1, alchValue:0 }; }
 function always(name, qty, itemId){
   const id = itemId ?? name.toLowerCase().replace(/\s/g,'_');
   return { name, key:id, chance:1, qtyAvg:qty, price:gp(id), alchValue:ALCH[id]??0 };
@@ -486,7 +565,7 @@ const MONSTERS = [
       d('Feathers ×15',32,15,'feather'), d('Feathers ×5',32,5,'feather') ] },
 
   { id:'cow', name:'Cow', level:2, hp:8, attack:1, strength:1, defLevel:1, defStab:-21, defSlash:-21, defCrush:-21, defRange:-21, defMagic:-21, attBonus:-15, strBonus:-15, attackSpeed:4,
-    loot:[ always('Cowhide',1,'cow_hide'), always('Raw beef',1,'raw_beef') ] },
+    loot:[ always('Bones',1,'bones'), always('Cowhide',1,'cow_hide'), always('Raw beef',1,'raw_beef') ] },
 
 
   { id:'goblin', name:'Goblin', level:2, hp:5, attack:1, strength:1, defLevel:1, defStab:-15, defSlash:-15, defCrush:-15, defRange:-15, defMagic:-15, attBonus:-21, strBonus:-15, attackSpeed:4,
@@ -497,6 +576,7 @@ const MONSTERS = [
       d('Earth rune ×4',3,4,'earthrune'),
       d('Bolts ×8',3,8,'bolt'),
       d("Chef's hat",3,1,'chefs_hat'),
+      d('Bronze spear',4,1,'bronze_spear'),
       d('Body rune ×7',5,7,'bodyrune'),
       d('Goblin armour',5,1,'goblin_armour'),
       d('Water rune ×6',6,6,'waterrune'),
@@ -511,6 +591,7 @@ const MONSTERS = [
       always('Bones',1,'bones'),
       d('Iron dagger',1,1,'iron_dagger'),
       d('Bronze med helm',2,1,'iron_full_helm'),
+      d('Bolts ×7',22,7,'bolt'),
       d('Bronze arrow ×7',3,7,'bronze_arrow'),
       d('Earth rune ×4',2,4,'earthrune'),
       d('Fire rune ×6',2,6,'firerune'),
@@ -519,6 +600,9 @@ const MONSTERS = [
       d('Earth talisman',2,1,'earth_talisman'),
       herbDrop(w(23)),
       coins(38,3), coins(9,5), coins(4,15), coins(1,25),
+      d('Fishing bait',5,1,'fishing_bait'),
+      d('Copper ore',2,1,'copper_ore'),
+      d('Cabbage',1,1,'cabbage'),
     ] },
 
   // NPC config @274: areas/area_alkharid/configs/alkharid.npc (verified exact).
@@ -528,6 +612,7 @@ const MONSTERS = [
       always('Bones',1,'bones'),
       d('Iron dagger',1,1,'iron_dagger'),
       d('Bronze med helm',2,1,'iron_full_helm'),
+      d('Bolts ×7',22,7,'bolt'),
       d('Bronze arrow ×7',3,7,'bronze_arrow'),
       d('Earth rune ×4',2,4,'earthrune'),
       d('Fire rune ×6',2,6,'firerune'),
@@ -536,6 +621,9 @@ const MONSTERS = [
       d('Earth talisman',2,1,'earth_talisman'),
       herbDrop(w(23)),
       coins(38,3), coins(9,5), coins(4,15), coins(1,25),
+      d('Fishing bait',5,1,'fishing_bait'),
+      d('Copper ore',2,1,'copper_ore'),
+      d('Cabbage',1,1,'cabbage'),
     ] },
 
   { id:'farmer', name:'Farmer', level:7, hp:12, attack:3, strength:4, defLevel:8, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:5, strBonus:6, attackSpeed:4,
@@ -550,6 +638,10 @@ const MONSTERS = [
       d('Chaos rune ×2',1,2,'chaosrune'),
       herbDrop(w(11)),
       coins(38,3), coins(23,10), coins(9,5), coins(4,15), coins(1,25),
+      d('Fishing bait',5,1,'fishing_bait'),
+      d('Copper ore',2,1,'copper_ore'),
+      d('Earth talisman',2,1,'earth_talisman'),
+      d('Cabbage',1,1,'cabbage'),
     ] },
 
   { id:'barbarian', name:'Barbarian', level:7, hp:14, attack:6, strength:6, defLevel:2, defStab:12, defSlash:15, defCrush:13, defRange:6, defMagic:3, attBonus:8, strBonus:7, attackSpeed:4,
@@ -565,6 +657,8 @@ const MONSTERS = [
       d('Mind rune ×5',2,5,'mindrune'),
       d('Law rune ×2',1,2,'lawrune'),
       coins(42,5), coins(9,8), coins(5,17), coins(3,27),
+      d('Tin ore',1,1,'tin_ore'), d('Fur',1,1,'fur'), d('Beer',1,1,'beer'),
+      d('Cooked meat',1,1,'cooked_meat'), d('Flier',1,1,'flier'), d('Ring mould',1,1,'ring_mould'),
     ] },
 
   { id:'dark_wizard', name:'Dark Wizard (lvl 7)', level:7, hp:12, attack:5, strength:2, defLevel:5, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
@@ -580,9 +674,10 @@ const MONSTERS = [
       d('Nature rune ×4',7,4,'naturerune'), d('Chaos rune ×5',6,5,'chaosrune'),
       d('Mind rune ×10',3,10,'mindrune'), d('Body rune ×10',3,10,'bodyrune'),
       d('Mind rune ×18',2,18,'mindrune'), d('Body rune ×18',2,18,'bodyrune'),
+      d('Blood rune ×2',2,2,'bloodrune'),
       d('Cosmic rune ×2',1,2,'cosmicrune'), d('Law rune ×3',1,3,'lawrune'),
       coins(17,1), coins(16,2), coins(7,4), coins(3,29), coins(1,30),
-      d('Water talisman',2,1,'water_talisman'), d('Fire talisman',2,1,'fire_talisman'),
+      d('Water talisman',1,1,'water_talisman'), d('Fire talisman',1,1,'fire_talisman'),
     ] },
 
   { id:'dark_wizard_20', name:'Dark Wizard (lvl 20)', level:20, hp:24, attack:17, strength:17, defLevel:14, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
@@ -591,9 +686,12 @@ const MONSTERS = [
       d('Black wizard hat',4,1,'chefs_hat'), d('Staff',4,1,'plainstaff'), d('Black robe',3,1,'goblin_armour'),
       d('Earth rune ×36',4,36,'earthrune'), d('Air rune ×10',3,10,'airrune'), d('Water rune ×10',3,10,'waterrune'),
       d('Earth rune ×10',3,10,'earthrune'), d('Fire rune ×10',3,10,'firerune'),
-      d('Air rune ×18',2,18,'airrune'), d('Earth rune ×18',2,18,'earthrune'),
+      d('Air rune ×18',2,18,'airrune'), d('Water rune ×18',2,18,'waterrune'),
+      d('Earth rune ×18',2,18,'earthrune'), d('Fire rune ×18',2,18,'firerune'),
       d('Nature rune ×4',7,4,'naturerune'), d('Chaos rune ×4',6,4,'chaosrune'),
       d('Mind rune ×10',3,10,'mindrune'), d('Body rune ×10',3,10,'bodyrune'),
+      d('Mind rune ×18',2,18,'mindrune'), d('Body rune ×18',2,18,'bodyrune'),
+      d('Blood rune ×2',2,2,'bloodrune'),
       d('Cosmic rune ×2',1,2,'cosmicrune'), d('Law rune ×3',1,3,'lawrune'),
       coins(17,1), coins(16,2), coins(9,4), coins(3,29), coins(1,30),
       d('Water talisman',2,1,'water_talisman'), d('Fire talisman',2,1,'fire_talisman'),
@@ -606,7 +704,10 @@ const MONSTERS = [
       d('Chaos rune ×2',8,2,'chaosrune'), d('Nature rune ×2',8,2,'naturerune'),
       d('Air rune ×5',3,5,'airrune'), d('Body rune ×5',3,5,'bodyrune'), d('Earth rune ×5',3,5,'earthrune'),
       d('Fire rune ×5',3,5,'firerune'), d('Mind rune ×5',3,5,'mindrune'), d('Water rune ×5',3,5,'waterrune'),
-      d('Air rune ×12',2,12,'airrune'), d('Mind rune ×12',2,12,'mindrune'),
+      d('Air rune ×12',2,12,'airrune'), d('Body rune ×12',2,12,'bodyrune'),
+      d('Earth rune ×12',2,12,'earthrune'), d('Fire rune ×12',2,12,'firerune'),
+      d('Mind rune ×12',2,12,'mindrune'), d('Water rune ×12',2,12,'waterrune'),
+      d('Blood rune ×2',1,2,'bloodrune'),
       d('Law rune ×2',1,2,'lawrune'),
       d('Mind talisman',3,1,'mind_talisman'), d('Water talisman',3,1,'water_talisman'),
       coins(23,1), coins(9,2), coins(7,18), coins(1,30),
@@ -632,6 +733,8 @@ const MONSTERS = [
       d('Air rune ×6',2,6,'airrune'), d('Earth rune ×3',2,3,'earthrune'),
       d('Fire rune ×2',2,2,'firerune'), d('Bronze arrow ×2',2,2,'bronze_arrow'),
       d('Chaos rune ×1',1,1,'chaosrune'), d('Nature rune ×1',1,1,'naturerune'), d('Steel arrow ×5',1,5,'steel_arrow'),
+      d('Blood rune ×1',1,1,'bloodrune'),
+      d('Grain',1,1,'grain'), d('Iron ore',1,1,'iron_ore'),
       coins(19,1), coins(18,5), coins(16,7), coins(9,12), coins(8,4), coins(4,25), coins(4,17), coins(2,30),
     ] },
 
@@ -671,13 +774,14 @@ const MONSTERS = [
   { id:'dwarf', name:'Dwarf', level:10, hp:16, attack:8, strength:8, defLevel:6, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:5, attBonus:5, strBonus:7, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
-      d('Bronze pickaxe',13,1,'bronze_axe'), d('Bronze med helm',4,1,'iron_full_helm'),
+      d('Bronze pickaxe',13,1,'bronze_pickaxe'), d('Bronze med helm',4,1,'iron_full_helm'),
       d('Bronze battleaxe',2,1,'bronze_axe'), d('Iron battleaxe',1,1,'iron_battleaxe'),
+      d('Bolts ×7',7,7,'bolt'),
       d('Chaos rune ×2',4,2,'chaosrune'), d('Nature rune ×2',4,2,'naturerune'),
       coins(20,4), coins(15,10), coins(2,30),
       d('Hammer',10,1,'bronze_axe'), d('Bronze bar',7,1,'bronze_bar'),
-      d('Iron ore',3,1,'iron_ore'), d('Tin ore',3,1,'tin_ore'), d('Copper ore',3,1,'copper_ore'),
-      d('Iron bar',2,1,'iron_bar'), d('Coal',1,1,'coal'),
+      d('Iron ore',4,1,'iron_ore'), d('Tin ore',3,1,'tin_ore'), d('Copper ore',3,1,'copper_ore'),
+      d('Iron bar',3,1,'iron_bar'), d('Coal',2,1,'coal'),
       gemDrop(w(1)),
     ] },
 
@@ -690,7 +794,7 @@ const MONSTERS = [
       d('Bronze arrow ×8',4,8,'bronze_arrow'), d('Chaos rune ×2',1,2,'chaosrune'), d('Nature rune ×3',2,3,'naturerune'),
       herbDrop(w(3)),
       coins(31,1), coins(20,2), coins(20,6), coins(7,13), coins(6,20), coins(2,30),
-      d('Iron ore',1,1,'iron_ore'),
+      d('Iron ore',1,1,'iron_ore'), d('Sardine',1,1,'sardine'),
     ] },
 
   { id:'pirate', name:'Pirate', level:23, hp:20, attack:20, strength:20, defLevel:20, defStab:0, defSlash:1, defCrush:0, defRange:0, defMagic:0, attBonus:10, strBonus:9, attackSpeed:4,
@@ -727,6 +831,7 @@ const MONSTERS = [
       herbDrop(w(35)), herbDrop(w(11),2),
       coins(5,3), coins(5,8), coins(3,29), coins(1,35),
       d('Vial of water',10,1,'vial_water'),
+      d('Bronze longsword',1,1,'bronze_longsword'), d('Snape grass',1,1,'snape_grass'),
       gemDrop(w(1)),
     ] },
 
@@ -743,6 +848,7 @@ const MONSTERS = [
       d('Iron dagger',6,1,'iron_dagger'),
       d('Druid robe top',6,1,'druidrobetop'), d('Druid robe bottom',5,1,'druidrobebottom'),
       d('Limpwurt root',3,1,'limpwurt_root'),
+      d('Antipoison (3)',1,1,'3doseantipoison'),
     ] },
 
   // Otherworldly being (Zanaris / Lost City) — combat 64, melee (crush).
@@ -834,7 +940,8 @@ const MONSTERS = [
       d('Iron scimitar',4,1,'iron_scimitar'), d('Steel sq shield',2,1,'mithril_sq_shield'), d('Steel axe',1,1,'steel_axe'),
       d('Chaos rune ×6',3,6,'chaosrune'), d('Water rune ×9',3,9,'waterrune'),
       d('Air rune ×10',2,10,'airrune'), d('Death rune ×2',2,2,'deathrune'),
-      d('Law rune ×3',2,3,'lawrune'), d('Mind rune ×2',1,2,'mindrune'), d('Nature rune ×2',1,2,'naturerune'),
+      d('Law rune ×3',2,3,'lawrune'), d('Blood rune ×2',1,2,'bloodrune'),
+      d('Mind rune ×2',1,2,'mindrune'), d('Nature rune ×2',1,2,'naturerune'),
       herbDrop(w(37)),
       coins(26,35), coins(13,12), coins(10,53), coins(7,1), coins(2,80),
       d('Coal',6,1,'coal'),
@@ -853,6 +960,7 @@ const MONSTERS = [
       d('Limpwurt root',1,1,'limpwurt_root'), d('Limpwurt root ×2',1,2,'limpwurt_root'),
       d('Snape grass',1,1,'snape_grass'), d('Vial of water',1,1,'vial_water'),
       coins(15,3), coins(3,29), coins(1,10),
+      d('Defence potion (1)',1,1,'1dose2defense'),
       gemDrop(w(1)),
     ] },
 
@@ -867,6 +975,7 @@ const MONSTERS = [
       herbDrop(w(3)),
       d('Steel bar',6,1,'steel_bar'),
       coins(21,35), coins(14,1), coins(11,6), coins(10,58), coins(9,12), coins(2,80),
+      d('Tin ore',1,1,'tin_ore'), d('Pot of flour',1,1,'pot_flour'), d('Bread',1,1,'bread'),
       gemDrop(w(3)),
     ] },
 
@@ -897,14 +1006,15 @@ const MONSTERS = [
       d('Iron sword',3,1,'iron_sword'), d('Steel dagger',3,1,'steel_dagger'), d('Steel longsword',1,1,'steel_longsword'),
       d('Law rune ×2',3,2,'lawrune'), d('Water rune ×2',2,2,'waterrune'), d('Fire rune ×7',2,7,'firerune'),
       d('Body rune ×6',2,6,'bodyrune'), d('Chaos rune ×3',2,3,'chaosrune'), d('Nature rune ×4',2,4,'naturerune'),
-      d('Cosmic rune ×2',1,2,'cosmicrune'), herbDrop(7/128),
-      coins(16,15), coins(12,28), coins(12,5), coins(4,62), coins(3,42), coins(1,1),
-      d('Limpwurt root',22,1,'limpwurt_root'), d('Goblin armour',2,1,'goblin_armour'), gemDrop(2/128),
+      d('Cosmic rune ×2',1,2,'cosmicrune'), d('Iron javelin ×5',1,5,'iron_javelin'), herbDrop(7/128),
+      coins(34,15), coins(12,5), coins(4,28), coins(4,62), coins(3,42), coins(4,1),
+      d('Limpwurt root',21,1,'limpwurt_root'), d('Goblin armour',2,1,'goblin_armour'), gemDrop(2/128),
     ] },
 
   { id:'hobgoblin_unarmed', name:'Hobgoblin', level:28, hp:29, attack:22, strength:24, defLevel:24, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
+      d('Bronze spear',3,1,'bronze_spear'), d('Iron spear',2,1,'iron_spear'), d('Steel spear',2,1,'steel_spear'),
       d('Iron sword',3,1,'iron_sword'), d('Steel dagger',3,1,'steel_dagger'), d('Steel longsword',1,1,'steel_longsword'),
       d('Law rune ×2',3,2,'lawrune'), d('Water rune ×2',2,2,'waterrune'),
       d('Fire rune ×7',2,7,'firerune'), d('Body rune ×6',2,6,'bodyrune'),
@@ -918,7 +1028,7 @@ const MONSTERS = [
   { id:'earth_warrior', name:'Earth Warrior', level:51, hp:54, attack:42, strength:42, defLevel:42,
     defStab:30, defSlash:40, defCrush:20, defRange:30, defMagic:10, attackSpeed:4,
     loot:[
-      d('Steel spear',3,1,'steel_axe'), d('Staff of earth',2,1,'staff_of_earth'),
+      d('Steel spear',3,1,'steel_spear'), d('Staff of earth',2,1,'staff_of_earth'),
       d('Earth rune ×12',13,12,'earthrune'), d('Nature rune ×3',9,3,'naturerune'),
       d('Chaos rune ×3',7,3,'chaosrune'), d('Law rune ×2',6,2,'lawrune'),
       d('Death rune ×2',4,2,'deathrune'), d('Earth rune ×60',3,60,'earthrune'),
@@ -936,10 +1046,11 @@ const MONSTERS = [
       d('Mind rune ×5',11,5,'mindrune'), d('Nature rune ×4',4,4,'naturerune'),
       d('Body rune ×11',3,11,'bodyrune'), d('Chaos rune ×2',3,2,'chaosrune'),
       d('Water rune ×27',3,27,'waterrune'), d('Mithril arrow ×5',2,5,'mithril_arrow'),
-      d('Adamant arrow ×2',1,2,'adamant_arrow'), d('Law rune ×2',1,2,'lawrune'),
+      d('Adamant arrow ×2',1,2,'adamant_arrow'), d('Blood rune ×2',1,2,'bloodrune'), d('Law rune ×2',1,2,'lawrune'),
       herbDrop(w(5)),
       coins(15,5), coins(15,48), coins(15,15), coins(10,49), coins(5,1), coins(5,2), coins(1,120), coins(10,8),
       d('Iron bar ×2',6,2,'iron_bar'), d('Iron bar',2,1,'iron_bar'),
+      d('Half apple pie',1,1,'half_an_apple_pie'), d('Iron ore',1,1,'iron_ore'), d('Pot of flour',1,1,'pot_flour'),
       gemDrop(w(1)),
     ] },
 
@@ -950,7 +1061,8 @@ const MONSTERS = [
       d('Iron battleaxe',3,1,'iron_battleaxe'), d('Mithril mace',1,1,'mithril_mace'),
       d('Nature rune ×4',10,4,'naturerune'), d('Chaos rune ×3',8,3,'chaosrune'),
       d('Law rune ×2',7,2,'lawrune'), d('Cosmic rune ×2',5,2,'cosmicrune'),
-      d('Mithril arrow ×3',5,3,'mithril_arrow'), d('Death rune ×2',3,2,'deathrune'),
+      d('Mithril arrow ×3',5,3,'mithril_arrow'), d('Adamant arrow ×2',2,2,'adamant_arrow'),
+      d('Death rune ×2',3,2,'deathrune'), d('Blood rune ×2',1,2,'bloodrune'),
       herbDrop(w(10)),
       coins(39,15),
       gemDrop(w(3)),
@@ -960,6 +1072,9 @@ const MONSTERS = [
   { id:'shadow_warrior', name:'Shadow Warrior', level:48, hp:67, attack:36, strength:33, defLevel:36, defStab:43, defSlash:31, defCrush:19, defRange:38, defMagic:15, attBonus:20, strBonus:26, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
+      d('Adamant spear',1,1,'adamant_spear'), d('Black dagger (p)',1,1,'black_dagger'),
+      d('Black knife',1,1,'black_knife'), d('Black longsword',1,1,'black_longsword'),
+      d('Black robe',1,1,'goblin_armour'),
       d('Cosmic rune ×3',9,3,'cosmicrune'), d('Blood rune ×2',6,2,'bloodrune'),
       d('Air rune ×45',4,45,'airrune'), d('Death rune ×2',4,2,'deathrune'),
       coins(47,8),
@@ -985,12 +1100,13 @@ const MONSTERS = [
       always('Big bones',1,'big_bones'),
       d('Black sq shield',5,1,'black_kiteshield'), d('Magic staff',2,1,'magic_staff'),
       d('Steel med helm',2,1,'steel_med_helm'), d('Mithril sword',2,1,'mithril_sword'),
+      d('Mithril spear',2,1,'mithril_spear'),
       d('Steel kiteshield',1,1,'steel_kiteshield'),
       d('Law rune ×3',4,3,'lawrune'), d('Air rune ×18',3,18,'airrune'),
       d('Earth rune ×27',3,27,'earthrune'), d('Chaos rune ×7',3,7,'chaosrune'),
       d('Nature rune ×6',3,6,'naturerune'), d('Cosmic rune ×2',2,2,'cosmicrune'),
       d('Iron arrow ×15',2,15,'iron_arrow'), d('Steel arrow ×30',1,30,'steel_arrow'),
-      d('Death rune ×3',1,3,'deathrune'),
+      d('Death rune ×3',1,3,'deathrune'), d('Blood rune ×1',1,1,'bloodrune'),
       herbDrop(w(5)),
       coins(19,37), coins(8,2), coins(10,119), coins(2,300),
       d('Steel bar',6,1,'steel_bar'), d('Coal',1,1,'coal'), d('Spinach roll',1,1,'spinach_roll'),
@@ -1000,22 +1116,36 @@ const MONSTERS = [
   { id:'icegiant', name:'Ice Giant', level:49, hp:70, attack:40, strength:40, defLevel:40, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:29, strBonus:31, attackSpeed:5,
     loot:[
       always('Big bones',1,'big_bones'),
+      d('Iron 2h sword',5,1,'iron_2h_sword'), d('Black kiteshield',4,1,'black_kiteshield'),
+      d('Steel axe',4,1,'steel_axe'), d('Steel sword',4,1,'steel_sword'),
+      d('Iron platelegs',1,1,'iron_platelegs'), d('Mithril mace',1,1,'mithril_mace'),
+      d('Mithril sq shield',1,1,'mithril_sq_shield'),
       d('Nature rune ×6',4,6,'naturerune'), d('Mind rune ×24',3,24,'mindrune'),
       d('Body rune ×37',3,37,'bodyrune'), d('Law rune ×3',2,3,'lawrune'),
       d('Water rune ×12',1,12,'waterrune'), d('Cosmic rune ×4',1,4,'cosmicrune'), d('Death rune ×3',1,3,'deathrune'),
+      d('Blood rune ×2',1,2,'bloodrune'),
       coins(32,117), coins(12,53), coins(10,196), coins(7,8), coins(6,22), coins(2,400),
-      d('Jug of wine',3,1,'jug_wine'), d('Mithril ore',1,1,'mithril_ore'),
+      d('Jug of wine',3,1,'jug_wine'), d('Mithril ore',1,1,'mithril_ore'), d('Banana',1,1,'banana'),
       gemDrop(w(4)),
     ] },
 
+  // Jogre — EXACT from jogre.rs2 @274: randominc(128) → denominator 129 (0..128
+  // inclusive). death_drop = big bones (guaranteed). Medium clue /129. Extra
+  // bones/big-bones rows are additional LOOT rolls on top of the guaranteed drop.
   { id:'jogre', name:'Jogre', level:53, hp:60, attack:43, strength:43, defLevel:43, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:22, strBonus:20, attackSpeed:6,
     loot:[
       always('Big bones',1,'big_bones'),
-      d('Nature rune ×2',10,2,'naturerune'), d('Nature rune ×10',2,10,'naturerune'), d('Nature rune ×5',2,5,'naturerune'),
-      herbDrop(w(6)),
-      d('Big bones',3,1,'big_bones'), d('Big bones ×3',2,3,'big_bones'),
-      d('Pineapple ×2',8,2,'beer'), d('Knife',5,1,'bronze_axe'),
-      gemDrop(w(1)),
+      d('Bronze spear',30,1,'bronze_spear',129),
+      d('Iron spear',4,1,'iron_spear',129),
+      d('Nature rune ×2',10,2,'naturerune',129), d('Nature rune ×10',2,10,'naturerune',129), d('Nature rune ×5',2,5,'naturerune',129),
+      d('Steel javelin ×5',2,5,'steel_javelin',129),
+      herbDrop(w(6,129)),
+      d('Pineapple ×2',8,2,'pineapple',129), d('Knife',5,1,'knife',129),
+      d('Bones',5,1,'bones',129),
+      d('Big bones',3,1,'big_bones',129), d('Big bones ×3',2,3,'big_bones',129),
+      gemDrop(w(1,129)),
+      d('Unid. snake weed',5,1,'unidentified_snake_weed',129),
+      d('Unid. rogues purse',5,1,'unidentified_rogues_purse',129),
     ] },
 
   // Mountain Troll — drop table EXACT from mountain_troll.rs2 @274 (random(128),
@@ -1078,20 +1208,47 @@ const MONSTERS = [
   // TIER 5 — HIGH
   // =====================================================================
 
+  // Chaos Dwarf — EXACT from chaos_dwarf.rs2 @274 ([ai_queue3,dwarf_chaos],
+  // random(128), death_drop = bones). Notable: muddy key 7/128, randomjewel
+  // 5/128 (the 123-128 else branch). NO herb and NO ultra-rare sub-table.
   { id:'chaos_dwarf', name:'Chaos Dwarf', level:48, hp:61, attack:38, strength:42, defLevel:28, defStab:40, defSlash:34, defCrush:25, defRange:35, defMagic:10, attBonus:13, strBonus:9, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
-      // Approximated drops — chaos dwarves drop runes, coins, gems
-      d('Steel arrow ×5',8,5,'steel_arrow'),
-      d('Mithril arrow ×3',4,3,'mithril_arrow'),
-      d('Mithril bar',2,1,'mithril_bar'),
-      d('Adamant kiteshield',1,1,'adamant_kiteshield'),
-      d('Fire rune ×30',6,30,'firerune'), d('Chaos rune ×8',5,8,'chaosrune'),
-      d('Nature rune ×6',4,6,'naturerune'), d('Law rune ×3',2,3,'lawrune'),
-      coins(28, 75), coins(15, 150), coins(8, 32), coins(4, 250),
-      d('Limpwurt root',5,1,'limpwurt_root'),
-      gemDrop(3/128),
-      ultrarareDrop(1/128),
+      d('Steel full helm',2,1,'steel_full_helm'),
+      d('Mithril longsword',1,1,'mithril_longsword'),
+      d('Mithril sq shield',1,1,'mithril_sq_shield'),
+      d('Law rune ×3',4,3,'lawrune'), d('Air rune ×24',3,24,'airrune'),
+      d('Chaos rune ×10',3,10,'chaosrune'), d('Mind rune ×37',3,37,'mindrune'),
+      d('Nature rune ×9',3,9,'naturerune'), d('Cosmic rune ×3',2,3,'cosmicrune'),
+      d('Death rune ×3',1,3,'deathrune'), d('Water rune ×10',1,10,'waterrune'),
+      coins(40,92), coins(18,47), coins(11,25), coins(10,150), coins(2,350), coins(2,15),
+      d('Muddy key',7,1,'muddy_key'),
+      d('Mithril bar',6,1,'mithril_bar'),
+      d('Coal',1,1,'coal'), d('Cheese',1,1,'cheese'), d('Tomato',1,1,'tomato'),
+      gemDrop(w(5)),
+    ] },
+
+  // Water Elemental — EXACT from elemental_water.rs2 @274 (Elemental Workshop
+  // dungeon; [ai_queue3,elemental_water], random(128), death_drop=vial_water).
+  // Stats from quest_elemental_workshop.npc @274: vislevel 34, 30 HP, all combat
+  // stats 30, no def bonuses. Magic level 30 (so it's not a free magic target).
+  // No clue drop. randomherb 14/128, randomjewel 2/128; rolls 100..127 (28/128)
+  // yield nothing. Roll weights sum to 100 + 28 nothing = 128.
+  { id:'water_elemental', name:'Water Elemental', level:34, hp:30, attack:30, strength:30, defLevel:30, magicLevel:30,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:5,
+    loot:[
+      always('Vial of water',1,'vial_water'),
+      d('Water rune ×15',13,15,'waterrune'),
+      d('Nature rune ×2',9,2,'naturerune'),
+      d('Chaos rune ×2',7,2,'chaosrune'),
+      d('Law rune',6,1,'lawrune'),
+      d('Death rune',4,1,'deathrune'),
+      d('Water rune ×20',3,20,'waterrune'),
+      d('Blood rune',1,1,'bloodrune'),
+      herbDrop(w(14)),
+      coins(36,12), coins(3,42),
+      d('Staff of water',2,1,'staff_of_water'),
+      gemDrop(w(2)),
     ] },
 
   { id:'hellhound', name:'Hellhound', level:122, hp:116, attack:105, strength:104, defLevel:102, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
@@ -1105,8 +1262,8 @@ const MONSTERS = [
       d('Rune med helm',1,1,'rune_med_helm'), d('Mithril sq shield',1,1,'mithril_sq_shield'),
       d('Mithril chainbody',1,1,'mithril_chainbody'),
       d('Steel axe',4,1,'steel_axe'), d('Steel full helm',4,1,'steel_full_helm'), d('Steel scimitar',3,1,'steel_scimitar'),
-      d('Jug of wine',2,1,'jug_wine'),
-      coins(1,450), coins(10,200), coins(8,120), coins(40,120), coins(1,120), coins(30,40), coins(7,10),
+      d('Jug of wine',3,1,'jug_wine'),
+      coins(1,450), coins(10,200), coins(40,120), coins(29,40), coins(7,10),
       d('Fire rune ×60',8,60,'firerune'), d('Fire rune ×30',1,30,'firerune'),
       herbDrop(w(1)),
       d('Gold ore',2,1,'gold_ore'), d('Death rune ×3',3,3,'deathrune'), d('Chaos rune ×12',5,12,'chaosrune'),
@@ -1137,6 +1294,7 @@ const MONSTERS = [
       herbDrop(w(19)),
       coins(40,60), coins(7,15), coins(6,25), coins(2,300), coins(1,50),
       d('Lobster',3,1,'lobster'), d('Steel bar',2,1,'steel_bar'),
+      d('Strength potion (2)',1,1,'2dose1strength'),
       gemDrop(w(11)),
       ultrarareDrop(w(1)),
     ] },
@@ -1153,6 +1311,7 @@ const MONSTERS = [
       herbDrop(w(23)),
       coins(40,132), coins(7,30), coins(6,44), coins(6,220), coins(1,460),
       d('Lobster',3,1,'lobster'), d('Adamantite bar',2,1,'adamantite_bar'),
+      d('Defence potion (3)',1,1,'3dose1defense'),
       gemDrop(w(5)),
       ultrarareDrop(w(1)),
     ] },
@@ -1223,7 +1382,8 @@ const MONSTERS = [
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Green dragonhide',1,'dragonhide_green'),
       d('Steel platelegs',4,1,'steel_platelegs'), d('Steel battleaxe',3,1,'steel_battleaxe'),
-      d('Mithril axe',3,1,'mithril_axe'), d('Mithril kiteshield',1,1,'mithril_kiteshield'),
+      d('Mithril axe',3,1,'mithril_axe'), d('Mithril spear',2,1,'mithril_spear'),
+      d('Mithril kiteshield',1,1,'mithril_kiteshield'),
       d('Adamant full helm',1,1,'adamant_full_helm'), d('Rune dagger',1,1,'rune_dagger'),
       d('Water rune ×75',8,75,'waterrune'), d('Nature rune ×15',5,15,'naturerune'),
       d('Law rune ×3',3,3,'lawrune'), d('Fire rune ×37',1,37,'firerune'),
@@ -1238,7 +1398,8 @@ const MONSTERS = [
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Blue dragonhide',1,'dragonhide_blue'),
       d('Steel platelegs',4,1,'steel_platelegs'), d('Steel battleaxe',3,1,'steel_battleaxe'),
-      d('Mithril axe',3,1,'mithril_axe'), d('Mithril kiteshield',1,1,'mithril_kiteshield'),
+      d('Mithril axe',3,1,'mithril_axe'), d('Mithril spear',2,1,'mithril_spear'),
+      d('Mithril kiteshield',1,1,'mithril_kiteshield'),
       d('Adamant full helm',1,1,'adamant_full_helm'), d('Rune dagger',1,1,'rune_dagger'),
       d('Water rune ×75',8,75,'waterrune'), d('Nature rune ×15',5,15,'naturerune'),
       d('Law rune ×3',3,3,'lawrune'), d('Fire rune ×37',1,37,'firerune'),
@@ -1279,9 +1440,10 @@ const MONSTERS = [
       d('Mithril kiteshield',1,1,'mithril_kiteshield'), d('Adamant platebody',1,1,'adamant_platebody'),
       d('Rune longsword',1,1,'rune_longsword'),
       d('Adamant javelin ×30',20,30,'steel_javelin'), d('Fire rune ×50',8,50,'firerune'),
+      d('Adamant dart(p) ×16',7,16,'adamant_dart'),
       d('Law rune ×10',5,10,'lawrune'), d('Blood rune ×15',3,15,'bloodrune'), d('Air rune ×75',1,75,'airrune'),
       coins(40,196), coins(10,330), coins(1,690),
-      d('Adamantite bar',3,1,'adamantite_bar'),
+      d('Adamantite bar',3,1,'adamantite_bar'), d('Chocolate cake',3,1,'chocolate_cake'),
       gemDrop(w(3)),
       ultrarareDrop(w(2)),
     ] },
@@ -1496,7 +1658,8 @@ const SKIP_DEFAULTS = new Set([
   'vial (empty)','vial','druid robe top','druid robe bottom','black robe',
   'black wizard hat','blue wizard hat','grain','fur','raw bear meat',
   'chefs hat','eye patch','bronze bar','wizard robe','raw beef','raw chicken',
-  'brass necklace','beer',
+  'brass necklace','beer','cabbage','banana','cheese','tomato','half apple pie',
+  'pot of flour','flier','ring mould','amulet mould','muddy key','pineapple',
   // capes
   'black cape','red cape','blue cape','yellow cape','green cape',
   'purple cape','orange cape','pink cape','white cape',
@@ -1632,6 +1795,10 @@ function adjustForRoW(monster, rowEnabled){
   });
 }
 
+// Normalize the jewel table to the default Legends state now that every
+// referenced table (ULTRA_TABLE, recalcUltraEV, …) is initialized.
+setLegendsComplete(LEGENDS_COMPLETE);
+
 window.GameData = {
   MONSTERS,
   ITEM_PRICES: P,
@@ -1648,9 +1815,11 @@ window.GameData = {
   get HERB_KEEP_FRAC(){ return HERB_KEEP_FRAC; },
   VALUE_THRESHOLD,
   get MEGA_EV(){ return MEGA_EV; },
-  ULTRARARE_EV,
+  get ULTRARARE_EV(){ return ULTRARARE_EV; },
   recalcGemEV,
   setJewelSpot,
+  setLegendsComplete,
+  get legendsComplete(){ return LEGENDS_COMPLETE; },
   get currentJewelSpot(){ return CURRENT_JEWEL_SPOT; },
   adjustForRoW,
   defaultLootAction,

@@ -281,7 +281,9 @@ function GearSlotPicker({ items, value, onChange, ct, disabled, hiddenTiers }){
 }
 
 function makeDefaults(combatType = 'melee', monsterId){
-  const monster = E.MONSTERS.find(m => m.id === (monsterId || 'hill_giant')) || E.MONSTERS[0];
+  // NOTE: the Hill Giant's id in gamedata is 'giant' (an old 'hill_giant'
+  // fallback here silently landed on MONSTERS[0] = chicken for fresh installs).
+  const monster = E.MONSTERS.find(m => m.id === (monsterId || 'giant')) || E.MONSTERS[0];
   const base = {
     combatType,
     attack:60, strength:70, defence:50, ranged:70, magic:55, hp:80, prayer:60,
@@ -294,6 +296,9 @@ function makeDefaults(combatType = 'melee', monsterId){
     // downside, so it's the default equipped ring. Ring of recoil is situational
     // (faster kills with no XP, shatters) — pick it only when it actually helps.
     ringOfWealth: true,
+    // Legends Quest complete → jewel roll 61 hits the mega-rare table instead of
+    // a talisman. Account-wide (not per-loadout). Default on.
+    legends: true,
     gear: { ring: 'ring_of_wealth' },
     specWeapon: 'none',   // 2nd weapon brought only to special-attack on cooldown
     sustained: false,
@@ -334,7 +339,7 @@ function makeDefaults(combatType = 'melee', monsterId){
   };
   if (combatType === 'melee'){
     return {...base, style:'aggressive', prayers:['none'], boosts:['none'],
-      accBonus:69, dmgBonus:71, attackSpeed:5, weapon:'dragon_longsword', weaponName:'Dragon longsword'};
+      accBonus:69, accByType:{stab:58,slash:69,crush:-2}, dmgBonus:71, attackSpeed:5, weapon:'dragon_longsword', weaponName:'Dragon longsword'};
   }
   if (combatType === 'ranged'){
     return {...base, style:'rapid', prayers:['none'], boosts:['none'],
@@ -725,7 +730,17 @@ function EquipmentOverview({input}){
         <OverviewRow k="Weapon" v={input.weaponName || 'custom'} />
         {ct==='ranged' && <OverviewRow k="Ammo" v={input.ammo && E.ARROWS[input.ammo] ? E.ARROWS[input.ammo].name : 'custom'} />}
         {ct==='magic' && <OverviewRow k="Spell" v={E.SPELLS[input.spell]?.name || '—'} />}
-        <OverviewRow k={labels.accB} v={`+${input.accBonus}`} mono />
+        {(() => {
+          // Melee: show the attack bonus for the ACTIVE stance's attack type
+          // (stab/slash/crush), not always slash — matches what the sim rolls.
+          let accVal = input.accBonus, accSuffix = '';
+          if (ct === 'melee' && input.accByType){
+            const st = E.meleeStance ? E.meleeStance(input.weapon, input.style) : null;
+            const t = st && st.type;
+            if (t && input.accByType[t] != null){ accVal = input.accByType[t]; accSuffix = ` ${t}`; }
+          }
+          return <OverviewRow k={labels.accB} v={`+${accVal}${accSuffix}`} mono />;
+        })()}
         <OverviewRow k={labels.dmgB} v={ct==='magic' ? `${input.dmgBonus}%` : `+${input.dmgBonus}`} mono />
         <OverviewRow k="Speed" v={`${input.attackSpeed}t · ${(input.attackSpeed*0.6).toFixed(1)}s`} mono />
         {(E.WEAPONS[input.weapon]?.poisonSeverity > 0) && (
@@ -790,6 +805,7 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
     const loadout = { ...(gear||{}), weapon: weaponKey, ammo: ammoKey };
     const r = EQ.loadoutToInput(loadout, ct);
     set('accBonus', r.accBonus);
+    set('accByType', r.accByType || null);
     if (ct !== 'magic') set('dmgBonus', r.dmgBonus);
     if (r.attackSpeed) set('attackSpeed', r.attackSpeed);
   };
@@ -824,6 +840,7 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
         return E.simulate({
           ...input, gear: g,
           accBonus: r.accBonus,
+          accByType: r.accByType || null,
           dmgBonus: ct === 'magic' ? input.dmgBonus : r.dmgBonus,
           attackSpeed: r.attackSpeed ?? input.attackSpeed,
         }).ttkSec;
@@ -1013,6 +1030,11 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
                     <span style={{color:'var(--text-3)'}}>DPS gain</span><span style={{textAlign:'right', color:'var(--gold)'}}>+{si.dpsGainPct.toFixed(1)}%</span>
                   </div>
                 )}
+                {cur==='dragon_halberd' && (
+                  <div style={{marginTop:6, fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', lineHeight:1.5}}>
+                    Note: the halberd spec hits twice only on targets larger than 1×1 (dragons, ogres, giants). We lack per-NPC size data, so both hits are assumed here — the DPS gain is overstated against small (1×1) monsters, which take just one hit.
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1124,7 +1146,7 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
           <div className="label-cap">Bonus override</div>
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
             <div className="field"><label>{labels.accB}</label>
-              <div className="input-row"><input className="input" type="number" value={input.accBonus} onChange={e=>{set('accBonus',+e.target.value); set('weapon','custom');}} /><span className="suffix">{labels.bSuffix}</span></div>
+              <div className="input-row"><input className="input" type="number" value={input.accBonus} onChange={e=>{set('accBonus',+e.target.value); set('accByType',null); set('weapon','custom');}} /><span className="suffix">{labels.bSuffix}</span></div>
             </div>
             <div className="field"><label>{labels.dmgB}</label>
               <div className="input-row"><input className="input" type="number" value={input.dmgBonus} onChange={e=>{set('dmgBonus',+e.target.value); set('weapon','custom');}} /><span className="suffix">{ct==='magic'?'%':'+'}</span></div>
@@ -1182,6 +1204,17 @@ function EquipmentPane({type, input, set, hiddenTiers = {}}){
             <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', marginTop:6, lineHeight:1.5}}>
               Affects ~randomjewel only — caps the gem roll so it never whiffs.
               Ultra-rare table unaffected.
+            </div>
+          </div>
+
+          <div className="hr" />
+          <div>
+            <div className="label-cap" style={{marginBottom:8}}>Quests</div>
+            <Toggle label="Legends Quest complete" subOn="jewel roll 61 → mega-rare" subOff="jewel roll 61 → talisman"
+              value={input.legends !== false} onChange={v=>set('legends',v)} color="teal"/>
+            <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', marginTop:6, lineHeight:1.5}}>
+              With Legends done, the rarest jewel band (1/128) rolls the mega-rare
+              table (rune spear · dragon sq · dragon spear) instead of a talisman.
             </div>
           </div>
 
@@ -1520,8 +1553,14 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
   // alch value EXCEEDS it, otherwise the cast nets ≤ 0 gp (and wastes time). So
   // don't offer 'alch' on cheap drops (water runes, bass, ore, etc.).
   const natRuneCost = window.GameData?.ITEM_PRICES?.naturerune ?? 347;
-  const canAlch = (d) => alchAllowed && !!d.alchValue && (d.alchValue - natRuneCost > 0)
-    && !d.isBone && !Array.isArray(d._expand);
+  // Bulk-unsellable gear (rune/tier weapons+armour) can't be sold, so the real
+  // choice is alch-or-drop, not alch-vs-sell. Offer alch for those whenever the
+  // alch value is non-trivial (>= floor), even if it's a few gp under a nature
+  // rune's cost — e.g. Mithril axe (312 alch) when nat runes are 337. Sellable
+  // items keep the strict "must beat the nature rune" profit gate.
+  const ALCH_OFFER_FLOOR = 250;
+  const canAlch = (d) => alchAllowed && !!d.alchValue && !d.isBone && !Array.isArray(d._expand)
+    && ((d.alchValue - natRuneCost > 0) || (d.bulkDead && d.alchValue >= ALCH_OFFER_FLOOR));
   const simNet = (override) => {
     try { return E.simulate({...input, lootPrefs:{...lootPrefs, ...override}}).effectiveNetGpPerHour; }
     catch { return null; }
@@ -1544,13 +1583,24 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
   // Keyed by ROW INDEX, not name: a monster can list the same item (e.g. several
   // 'Coins' drops at different amounts) on multiple rows, and keying by name
   // would pop the tooltip on every one of them at once.
-  const showHover = (d, rowKey) => {
+  const showHover = (d, rowKey, ev) => {
     const cur = d.pref ?? lootPrefs[d.name] ?? 'loot';
     const rows = actionsFor(d).map(a => {
       const net = simNet({ [d.name]: a });
       return { action:a, net, delta: net==null?null:net-baseNet, current:a===cur };
     });
-    setHover({ key:rowKey, rows });
+    // Flip the tooltip ABOVE the row when it would spill past the bottom of the
+    // scroll container (which clips it — bottom rows' tooltips were cut off
+    // under the "Prayer XP from burying" strip). Estimate height: header +
+    // ~17px per action row + padding.
+    let flip = false;
+    try {
+      const est = 34 + rows.length * 17;
+      const cell = ev.currentTarget.getBoundingClientRect();
+      const cont = ev.currentTarget.closest('.scroll');
+      if (cont && cell.bottom + est > cont.getBoundingClientRect().bottom) flip = true;
+    } catch {}
+    setHover({ key:rowKey, rows, flip });
   };
 
   // --- optimizer: greedy fixpoint over loot/alch/skip(/unid) per item ------
@@ -1813,7 +1863,7 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                   <div className="barwrap gold" style={{flex:1}}><div style={{width:`${d.evGp/maxEv*100}%`, background:'var(--gold)'}}/></div>
                   <span className="num" style={{color:'var(--gold)', minWidth:60, textAlign:'right'}}>{fmtInt(d.evGp)}</span>
                 </div></td>
-                <td onMouseEnter={()=>showHover(d, i)} onMouseLeave={()=>setHover(null)} style={{position:'relative'}}>
+                <td onMouseEnter={(ev)=>showHover(d, i, ev)} onMouseLeave={()=>setHover(null)} style={{position:'relative'}}>
                   <div style={{display:'flex', gap:4}}>
                     {(!isBone || /dragon/i.test(d.name)) && prefBtn(d.name,'loot',pref==='loot','teal')}
                     {d.tag==='herb' ? prefBtn(d.name,'unid',pref==='unid','blue') : null}
@@ -1823,7 +1873,8 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                     {prefBtn(d.name,'skip',pref==='skip','red')}
                   </div>
                   {hover && hover.key===i && (
-                    <div style={{position:'absolute', right:0, top:'100%', zIndex:30, marginTop:4,
+                    <div style={{position:'absolute', right:0, zIndex:30,
+                      ...(hover.flip ? {bottom:'100%', marginBottom:4} : {top:'100%', marginTop:4}),
                       background:'var(--bg-0)', border:'1px solid var(--border-3)', borderRadius:4,
                       padding:'7px 9px', minWidth:170, boxShadow:'0 6px 20px rgba(0,0,0,.45)'}}>
                       <div style={{fontFamily:'var(--mono)', fontSize:9, color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:5}}>net gp/hr if…</div>
@@ -3397,7 +3448,7 @@ function saveInput(input){
 // user saves a custom setup, and used as the default baseline otherwise.
 const SETUP_FIELDS = [
   'combatType','style','prayers','boosts','weapon','weaponName','ammo',
-  'ammoRangeBonus','spell','spellBase','charge','gear','accBonus','dmgBonus',
+  'ammoRangeBonus','spell','spellBase','charge','gear','accBonus','accByType','dmgBonus',
   'attackSpeed','sustained','repotThreshold','ringOfWealth','specWeapon','specAmmo','trip',
 ];
 const pickSetup = (s) => Object.fromEntries(SETUP_FIELDS.map(f => [f, s[f]]));
@@ -3557,7 +3608,7 @@ function CombatWorkbench(){
         // type's saved loadout (or sensible defaults the first time).
         const stash = {
           style:s.style, prayers:s.prayers, boosts:s.boosts,
-          accBonus:s.accBonus, dmgBonus:s.dmgBonus, attackSpeed:s.attackSpeed,
+          accBonus:s.accBonus, accByType:s.accByType, dmgBonus:s.dmgBonus, attackSpeed:s.attackSpeed,
           weapon:s.weapon, weaponName:s.weaponName, ammo:s.ammo,
           ammoRangeBonus:s.ammoRangeBonus, spell:s.spell, spellBase:s.spellBase, charge:s.charge,
           gear:s.gear, sustained:s.sustained, repotThreshold:s.repotThreshold,
@@ -3787,7 +3838,7 @@ function CombatSpreadsheet(){
         } />
         <CompactSel label="PRAY"   v={(input.prayers||['none'])[0]} onChange={v=>set('prayers',[v])} opts={Object.entries(prayers).map(([k,v])=>[k,v.label.split(' (')[0]])} />
         <CompactSel label="POT"    v={(input.boosts||['none'])[0]} onChange={v=>set('boosts',[v])} opts={Object.entries(potions).map(([k,v])=>[k,v.label])} />
-        <Compact label={ct==='magic'?'M+%':'ACC+'} v={input.accBonus} onChange={v=>set('accBonus',v)} />
+        <Compact label={ct==='magic'?'M+%':'ACC+'} v={input.accBonus} onChange={v=>{set('accBonus',v); set('accByType',null);}} />
         <Compact label={ct==='magic'?'DMG%':'DMG+'} v={input.dmgBonus} onChange={v=>set('dmgBonus',v)} />
         <Compact label="SPD"  v={input.attackSpeed} onChange={v=>set('attackSpeed',v)} />
         <Compact label="F/KL" v={input.foodPerKill} step={0.05} onChange={v=>set('foodPerKill',v)} />

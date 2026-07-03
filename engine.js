@@ -83,18 +83,21 @@
   const WEAPONS = {
     // melee weapons — grouped best → worst (dragon, then rune→iron scimitars).
     // accBonus=slashattack, dmgBonus=strengthbonus. EXACT from *.obj @274.
-    dragon_longsword: { name:'Dragon longsword',  type:'melee', wclass:'longsword', accBonus:69, dmgBonus:71, speed:5, alch:60000 },
-    dragon_mace:      { name:'Dragon mace',       type:'melee', wclass:'mace',     accBonus:60, dmgBonus:55, speed:5, alch:30000 },
-    dragon_halberd:   { name:'Dragon halberd',    type:'melee', wclass:'halberd',  accBonus:95, dmgBonus:89, speed:7, alch:150000, twoHand:true },
-    dragon_dagger:    { name:'Dragon dagger',     type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:18000, stab:true },
+    // acc:{stab,slash,crush} = EXACT per-style attack bonuses from *.obj @274.
+    // accBonus mirrors acc.slash (fallback + display); the stance's attack type
+    // picks the right one at sim time (see simulate() melee branch).
+    dragon_longsword: { name:'Dragon longsword',  type:'melee', wclass:'longsword', accBonus:69, acc:{stab:58,slash:69,crush:-2}, dmgBonus:71, speed:5, alch:60000 },
+    dragon_mace:      { name:'Dragon mace',       type:'melee', wclass:'mace',     accBonus:60, acc:{stab:40,slash:-2,crush:60}, dmgBonus:55, speed:5, alch:30000 },
+    dragon_halberd:   { name:'Dragon halberd',    type:'melee', wclass:'halberd',  accBonus:95, acc:{stab:70,slash:95,crush:0}, dmgBonus:89, speed:7, alch:150000, twoHand:true },
+    dragon_dagger:    { name:'Dragon dagger',     type:'melee', wclass:'dagger',   accBonus:25, acc:{stab:40,slash:25,crush:-4}, dmgBonus:40, speed:4, alch:18000, stab:true },
     // Dragon dagger(p) — identical combat stats plus weapon poison (severity 20).
-    dragon_dagger_p:  { name:'Dragon dagger(p)',  type:'melee', wclass:'dagger',   accBonus:40, dmgBonus:40, speed:4, alch:14400, stab:true, poisonSeverity:20 },
-    rune_scimitar:    { name:'Rune scimitar',     type:'melee', wclass:'scimitar', accBonus:45, dmgBonus:44, speed:4, alch:15360 },
-    adamant_scimitar: { name:'Adamant scimitar',  type:'melee', wclass:'scimitar', accBonus:29, dmgBonus:28, speed:4, alch:1536 },
-    mithril_scimitar: { name:'Mithril scimitar',  type:'melee', wclass:'scimitar', accBonus:21, dmgBonus:20, speed:4, alch:624 },
-    black_scimitar:   { name:'Black scimitar',    type:'melee', wclass:'scimitar', accBonus:19, dmgBonus:14, speed:4, alch:460 },
-    steel_scimitar:   { name:'Steel scimitar',    type:'melee', wclass:'scimitar', accBonus:15, dmgBonus:14, speed:4, alch:240 },
-    iron_scimitar:    { name:'Iron scimitar',     type:'melee', wclass:'scimitar', accBonus:10, dmgBonus:9,  speed:4, alch:67 },
+    dragon_dagger_p:  { name:'Dragon dagger(p)',  type:'melee', wclass:'dagger',   accBonus:25, acc:{stab:40,slash:25,crush:-4}, dmgBonus:40, speed:4, alch:14400, stab:true, poisonSeverity:20 },
+    rune_scimitar:    { name:'Rune scimitar',     type:'melee', wclass:'scimitar', accBonus:45, acc:{stab:7,slash:45,crush:-2}, dmgBonus:44, speed:4, alch:15360 },
+    adamant_scimitar: { name:'Adamant scimitar',  type:'melee', wclass:'scimitar', accBonus:29, acc:{stab:6,slash:29,crush:-2}, dmgBonus:28, speed:4, alch:1536 },
+    mithril_scimitar: { name:'Mithril scimitar',  type:'melee', wclass:'scimitar', accBonus:21, acc:{stab:5,slash:21,crush:-2}, dmgBonus:20, speed:4, alch:624 },
+    black_scimitar:   { name:'Black scimitar',    type:'melee', wclass:'scimitar', accBonus:19, acc:{stab:4,slash:19,crush:-2}, dmgBonus:14, speed:4, alch:460 },
+    steel_scimitar:   { name:'Steel scimitar',    type:'melee', wclass:'scimitar', accBonus:15, acc:{stab:3,slash:15,crush:-2}, dmgBonus:14, speed:4, alch:240 },
+    iron_scimitar:    { name:'Iron scimitar',     type:'melee', wclass:'scimitar', accBonus:10, acc:{stab:2,slash:10,crush:-2}, dmgBonus:9,  speed:4, alch:67 },
     // ranged — bows, best → worst. dmgBonus=0; ammo adds str. EXACT rangeattack
     // from bows.obj @274 (shortbow rate 4, longbow rate 6).
     magic_shortbow:   { name:'Magic shortbow',    type:'ranged', sub:'bow', accBonus:69, dmgBonus:0,  speed:4, alch:960, twoHand:true },
@@ -414,6 +417,9 @@
   // ====================================================================
   const SPEC_DATA = {
     dragon_dagger:    { combat:'melee',  cost:25, hits:2, dmgMult:1.15, accMult:1.15, defField:'defSlash', rngLvlBonus:0 },
+    // Dragon dagger(p) — identical spec (2 hits, ×1.15 dmg & acc); the poison
+    // variant's damage is the same, its own poisonSeverity is applied via WEAPONS.
+    dragon_dagger_p:  { combat:'melee',  cost:25, hits:2, dmgMult:1.15, accMult:1.15, defField:'defSlash', rngLvlBonus:0 },
     dragon_longsword: { combat:'melee',  cost:25, hits:1, dmgMult:1.25, accMult:1.00, defField:'defSlash', rngLvlBonus:0 },
     dragon_halberd:   { combat:'melee',  cost:30, hits:2, dmgMult:1.10, accMult:1.00, defField:'defSlash', rngLvlBonus:0 },
     dragon_mace:      { combat:'melee',  cost:25, hits:1, dmgMult:1.50, accMult:1.25, defField:'defCrush', rngLvlBonus:0 },
@@ -582,6 +588,17 @@
 
     let effAcc, effDmg, mh, dbaInfo = null;
     let accBonusEff = input.accBonus;   // may be augmented by ammo (ranged)
+    // Stance-specific melee accuracy: the chosen stance hits stab/slash/crush
+    // (meleeStanceEntry.type). input.accByType carries the loadout's per-type
+    // attack totals (weapon acc.{type} + armour {type}Att, from equipment.js).
+    // Pick the bonus matching the stance; fall back to the flat accBonus when
+    // absent (custom loadouts) so nothing breaks. This is why a Dagger on Stab
+    // (+40) is more accurate than on Slash (+25), and a Mace on Pound/crush
+    // (+60) hugely beats its slash (-2).
+    if (input.combatType === 'melee' && meleeStanceEntry && input.accByType){
+      const byType = input.accByType[meleeStanceEntry.type];
+      if (byType != null) accBonusEff = byType;
+    }
     // Fluid sustained model: each branch fills offSamples with one entry per
     // decay minute ({effAcc, effDmg, mh}); avgHit/hitChance are averaged across
     // them below. offSamples[0] is always the freshly-potted PEAK.
@@ -735,7 +752,13 @@
         }
         const sb = EQ.sumBonuses({ ...input.gear, weapon: specKey, ammo: specAmmoKey });
         if (input.combatType === 'ranged'){ accBonusSpec = sb.rngAtt; dmgBonusSpec = sb.rngStr; }
-        else if (input.combatType === 'melee'){ accBonusSpec = sb.slashAtt; dmgBonusSpec = sb.str; }
+        else if (input.combatType === 'melee'){
+          // Spec accuracy must use the attack bonus matching the spec's attack
+          // TYPE (sd.defField), not always slash: the Dragon mace spec rolls
+          // against defCrush, so it uses crushAtt (+60), NOT slashAtt (-2).
+          const specAttKey = { defStab:'stabAtt', defSlash:'slashAtt', defCrush:'crushAtt' }[sd.defField] || 'slashAtt';
+          accBonusSpec = sb[specAttKey]; dmgBonusSpec = sb.str;
+        }
         else { accBonusSpec = sb.magAtt; dmgBonusSpec = 0; }
         // sumBonuses already folded the arrow rangebonus into rng att + str.
       } else {
@@ -1030,6 +1053,9 @@
     // adjustForRoW so the gem drop's price + GEM_EV_* reflect this monster's spot.
     const jewelSpot = (input.jewelSpotByMonster && m && input.jewelSpotByMonster[m.id]) || 'underground';
     if (window.GameData && window.GameData.setJewelSpot) window.GameData.setJewelSpot(jewelSpot);
+    // Legends Quest gate: enables the jewel table's mega-rare band (roll 61).
+    // Undefined (older saved inputs) defaults to complete.
+    if (window.GameData && window.GameData.setLegendsComplete) window.GameData.setLegendsComplete(input.legends !== false);
     const lootTable = window.GameData?.adjustForRoW
       ? window.GameData.adjustForRoW(m, !!input.ringOfWealth)
       : (m.loot || []);

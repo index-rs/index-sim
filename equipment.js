@@ -203,8 +203,16 @@
     let thrownAmmo = null;
     if (loadout.weapon && loadout.weapon !== 'none' && E?.WEAPONS[loadout.weapon]){
       const w = E.WEAPONS[loadout.weapon];
-      // weapon's accBonus maps to its style attack; dmgBonus to strength.
-      if (w.type === 'melee'){ totals.slashAtt += w.accBonus; totals.str += w.dmgBonus; }
+      // weapon's per-style attack maps to stab/slash/crush; dmgBonus to strength.
+      // acc:{stab,slash,crush} is exact per-obj; fall back to accBonus (=slash)
+      // for any weapon that predates the per-style data.
+      if (w.type === 'melee'){
+        const a = w.acc || {};
+        totals.stabAtt  += (a.stab  != null ? a.stab  : 0);
+        totals.slashAtt += (a.slash != null ? a.slash : w.accBonus);
+        totals.crushAtt += (a.crush != null ? a.crush : 0);
+        totals.str += w.dmgBonus;
+      }
       else if (w.type === 'ranged'){ totals.rngAtt += w.accBonus; totals.rngStr += w.dmgBonus; }
       else if (w.type === 'magic'){ totals.magAtt += w.accBonus; }
       // Thrown weapons are mainhand AND their own ammo — pull the paired
@@ -231,12 +239,16 @@
     const t = sumBonuses({ ...loadout, ammo:'none' });
     const E = window.SimEngine;
     const w = loadout.weapon && E?.WEAPONS[loadout.weapon];
-    let accBonus = 0, dmgBonus = 0;
-    if (combatType === 'melee'){ accBonus = t.slashAtt; dmgBonus = t.str; }
+    let accBonus = 0, dmgBonus = 0, accByType = null;
+    if (combatType === 'melee'){
+      accBonus = t.slashAtt; dmgBonus = t.str;
+      // Per-stance attack totals so simulate() can pick stab/slash/crush by stance.
+      accByType = { stab: t.stabAtt, slash: t.slashAtt, crush: t.crushAtt };
+    }
     else if (combatType === 'ranged'){ accBonus = t.rngAtt; dmgBonus = t.rngStr; }
     else { accBonus = t.magAtt; dmgBonus = 0; }
     return {
-      accBonus, dmgBonus,
+      accBonus, dmgBonus, accByType,
       attackSpeed: w ? w.speed : undefined,
       totals: t,
     };
