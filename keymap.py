@@ -122,6 +122,9 @@ EQUIP_SUFFIXES = (
 RUNE_ALCH = {
     "rune_dagger", "rune_warhammer", "rune_mace", "rune_spear",
     "rune_battleaxe", "rune_longsword", "rune_sword",
+    # rune_axe — the woodcutting hatchet off the steel dragon table @289.
+    # Alch-only like the rest; nobody buys them in bulk.
+    "rune_axe",
 }
 # Shop-stocked staves — the general store sells them endlessly, so a listing is
 # a hope, not a bid. Mirrors UNSELLABLE_STAVES in gamedata.js.
@@ -141,6 +144,10 @@ EXCLUDE_EXPLICIT = {
     "wizards_robe", "raw_beef", "raw_chicken", "brass_necklace", "beer",
     "magic_staff", "bass", "tuna",
     "staff_of_earth", "staff_of_fire", "staff_of_air", "staff_of_water",
+    # soulrune — fixed price in STATIC_PRICES. The only sales are ones and twos
+    # to players who need them for a quest and can't reach the store that
+    # stocks them; that prices one buyer's need, not a stack off a dragon.
+    "soulrune",
     "rune_javelin", "mind_talisman", "earth_talisman", "air_talisman",
     "fire_talisman", "body_talisman", "cosmic_talisman",
     "black_cape", "red_cape", "blue_cape", "yellow_cape", "green_cape",

@@ -5,6 +5,12 @@
 const { useState, useMemo, useEffect } = React;
 const E = window.SimEngine;
 
+// ---------- placeholder prices ------------------------------------------
+// Thin wrappers over GameData so the JSX stays readable and nothing breaks if
+// gamedata.js hasn't attached yet. See PLACEHOLDER_PRICES there.
+const isPlaceholderPrice = k => !!window.GameData?.isPlaceholderPrice?.(k);
+const placeholderPriceNote = k => window.GameData?.placeholderPriceNote?.(k) || 'Placeholder price — not a market value.';
+
 // ---------- formatters --------------------------------------------------
 const fmtInt = n => n == null || !isFinite(n) ? '—' : Math.round(n).toLocaleString();
 const fmt1   = n => n == null || !isFinite(n) ? '—' : n.toFixed(1);
@@ -1845,8 +1851,17 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                 {/* Bulk-unsellable gear has no sale price — nobody buys these in
                     stacks, so the engine pays out alch value only. Showing a
                     market figure here would claim a value the sim rejects. */}
+                {/* A placeholder price is an admitted guess (no market history
+                    for the item yet). Flag it so nobody reads it as real; the
+                    flag clears itself once a scraped price lands. */}
                 <td className="right num" title={d.bulkDead ? 'not sellable in bulk — alch value only' : undefined}>
-                  {d.bulkDead ? '—' : fmtInt(d.price)}
+                  {d.bulkDead ? '—' : (<>
+                    {isPlaceholderPrice(d.key) && (
+                      <span title={placeholderPriceNote(d.key)}
+                            style={{color:'var(--red)', fontWeight:700, cursor:'help', marginRight:4}}>!</span>
+                    )}
+                    {fmtInt(d.price)}
+                  </>)}
                 </td>
                 <td className="right num" style={{color: alchProfit>(d.bulkDead?0:d.price)?'var(--green)':'var(--text-3)'}}>
                   {d.alchValue ? fmtInt(alchProfit) : '—'}
@@ -2165,14 +2180,18 @@ function TripPane({input, result, setTrip, setCannon}){
             Ranged, magic & halberds safespot by default (attack from behind an
             obstacle — no hits, no dragonfire). Protection blocks that style's
             damage when fighting in the open.
+            {input.monster && input.monster.dragonfireRanged && (
+              <> <b>{input.monster.name}s breathe at range</b> — a safespot stops
+              the melee but not the fire.</>
+            )}
           </div>
           {input.monster && input.monster.dragonfire && (
             <>
               <Toggle label="Antifire potion" subOn="negates dragonfire (full w/ shield)" subOff="no antifire" color="amber"
                       value={!!t.antifire} onChange={v=>setTrip({antifire:v})} />
-              {trip && !trip.incoming.safespot && (
+              {trip && trip.incoming.dragonfire > 0 && (
                 <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)'}}>
-                  Dragonfire chip: {trip.incoming.dragonfire} hp/kill
+                  Dragonfire chip: {Math.round(trip.incoming.dragonfire * 10) / 10} hp/kill
                   {t.antifire && (input.gear?.shield==='anti_dragon') ? ' — immune (potion + shield)' :
                    t.antifire ? ' — potion only (equip anti-dragon shield for full immunity)' :
                    (input.gear?.shield==='anti_dragon') ? ' — shield only (add antifire for full immunity)' : ''}

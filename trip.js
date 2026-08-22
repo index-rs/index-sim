@@ -28,6 +28,12 @@
   // each trip reflect the real travel cost. Override per-run in the Trip panel.
   const BANK_PRESETS = {
     green_dragon:240, blue_dragon:270, red_dragon:300, black_dragon:300,
+    // Metal dragons live in the Karamja/Brimhaven dungeon (their AI script sits
+    // under area_karamja @289) and Brimhaven has no bank — it's the boat back
+    // to Ardougne, so the round trip is long. No spawns exist in Content@289's
+    // maps yet, so this is a gameplay estimate, not a measured distance;
+    // override it in the Trip panel once the spawns land.
+    bronze_dragon:360, iron_dragon:360, steel_dragon:360,
     ice_warrior:150, firegiant:210, giant:90, mossgiant:110, icegiant:120,
     hellhound:150, greater_demon:130, lesser_demon:120, black_demon:160,
     hobgoblin_armed:120, hobgoblin_unarmed:120, bandit:180, ankou:140,
@@ -102,6 +108,9 @@
     // Safespotting: ranged, magic, and halberds attack from behind an
     // obstacle, so the monster never gets a hit in (and 2004 dragonfire is
     // melee-range breath — a safespotted dragon can't breathe on you).
+    // EXCEPT the metal dragons (m.dragonfireRanged): metal_dragon.rs2 @289
+    // sends them to ~metal_dragon_dragonfire_far when you're out of melee
+    // range, so a safespot stops their melee but NOT their breath.
     // Auto-on for those methods; override with trip.safespot = true/false.
     const wclass = window.SimEngine?.WEAPONS?.[input.weapon]?.wclass;
     const safespotAuto = ctx.combatType === 'ranged' || ctx.combatType === 'magic'
@@ -109,10 +118,6 @@
     const safespot = (input.trip && input.trip.safespot != null)
       ? !!input.trip.safespot : safespotAuto;
     const regenPerKill = (ctx.cycle || 0) / 60;
-    if (safespot){
-      return { hpPerKill:0, netHpPerKill:0, regenPerKill, monMax,
-               hitChance:0, dragonfire:0, protected:false, safespot:true, safespotAuto };
-    }
 
     const EQ = window.Equipment;
     const totals = (EQ && input.gear)
@@ -133,29 +138,69 @@
 
     const atkInterval = (m.attackSpeed || 4) * 0.6;
     const attacks = (ctx.ttk || 0) / atkInterval;
-    let hpPerKill = attacks * hc * (monMax / 2);
 
+    const hasAnti = !!(input.gear && input.gear.shield === 'anti_dragon');
+    const antifire = !!(input.trip && input.trip.antifire);
+
+    // ---- dragonfire --------------------------------------------------
+    // Two different models, because @289 gave the metal dragons their own
+    // breath that shares nothing with the chromatic dragons' but the name.
+    //
+    // m.dragonfireMax (metal dragons) — ~metal_dragon_breath_maxhit:
+    //   base 30; +20 when the dragon's magic attack roll beats your SLASH
+    //   defence roll; the anti-dragon shield REPLACES the whole thing with 5
+    //   (the roll is never consulted); then an antifire potion subtracts 15,
+    //   floored at 0. Damage is randominc(maxhit) → uniform 0..maxhit, so the
+    //   average hit is maxhit/2. Protection prayers do NOT reduce it.
+    //   Breath rate: 1/4 of attacks in melee range (metal_dragon.rs2 rolls
+    //   random(4) = 0), but EVERY attack once you're out of melee range —
+    //   which is exactly the safespot case.
+    // Everything else — the flat 2004 per-kill chip the older dragons use.
     let dragonfire = 0;
-    if (m.dragonfire){
-      const hasAnti = (input.gear && input.gear.shield === 'anti_dragon');
-      const antifire = !!(input.trip && input.trip.antifire);
+    let breathRate = 0;
+    if (m.dragonfire && m.dragonfireMax){
+      breathRate = safespot ? 1 : (m.dragonfireRate ?? 0.25);
+      let expMax;
+      if (hasAnti){
+        expMax = 5;
+      } else {
+        // npc_magic_attack_roll: (magic + 9) × (magicattack bonus + 64).
+        // Same magicLevel the engine uses for their magic DEFENCE roll — it's
+        // one field in the npc config (magic=100), read by both sides. No
+        // magic attack bonus is declared. Compared against the player's slash
+        // defence roll with the same randominc-vs-randominc test that
+        // hitChanceLocal already models.
+        const monMagRoll = ((m.magicLevel ?? 1) + 9) * ((m.magAttBonus ?? 0) + 64);
+        const pSlashDefRoll =
+          Math.floor((defLvl * prayerDefMult) + 9) * ((totals.slashDef || 0) + 64);
+        const pBurn = hitChanceLocal(monMagRoll, pSlashDefRoll);
+        expMax = m.dragonfireMax + 20 * pBurn;
+      }
+      if (antifire) expMax = Math.max(0, expMax - 15);
+      dragonfire = attacks * breathRate * (expMax / 2);
+    } else if (m.dragonfire && !safespot){
       // 2004 dragonfire mitigation: shield ~85% off, antifire potion big cut,
       // and shield + antifire = full immunity (0). Neither = full ~20 hit.
       if (hasAnti && antifire) dragonfire = 0;
       else if (hasAnti)        dragonfire = 3;
       else if (antifire)       dragonfire = 4;
       else                     dragonfire = 20;
-      hpPerKill += dragonfire;
     }
+
+    // Melee chip. Safespotting removes it entirely; against a metal dragon the
+    // breath eats breathRate of the attacks that would otherwise be headbutts.
+    const meleeShare = safespot ? 0 : (1 - breathRate);
+    let hpPerKill = attacks * meleeShare * hc * (monMax / 2) + dragonfire;
+
     // Poison — some monsters (poison spiders, tribesmen) inflict poison while
     // you fight them unprotected. It's a damage-over-time, not blocked by
     // protection prayers; we model ~one poison cycle's worth of chip per kill
     // (it starts at poisonMax and ticks down). Super-antipoison gives immunity
     // → 0; at monsters that DROP antipoison (tribesmen) you sustain immunity
-    // from their drops, so it's free. Only relevant when NOT safespotting
-    // (safespot returns 0 above before reaching here).
+    // from their drops, so it's free. Only relevant when NOT safespotting —
+    // out of reach, nothing can poison you.
     let poison = 0;
-    if (m.poisons){
+    if (m.poisons && !safespot){
       const onAnti = !!m.antipoisonFromDrops || !!(input.trip && input.trip.antipoison);
       poison = onAnti ? 0 : (m.poisonMax ?? 5);
       hpPerKill += poison;
@@ -164,8 +209,9 @@
     // re-engage) you heal some of the damage back — on slow, low-damage
     // targets (e.g. chaos druids) regen out-paces incoming, so net food = 0.
     const netHpPerKill = Math.max(0, hpPerKill - regenPerKill);
-    return { hpPerKill, netHpPerKill, regenPerKill, monMax, hitChance: hc,
-             dragonfire, poison, protected: isProt, safespot:false, safespotAuto };
+    return { hpPerKill, netHpPerKill, regenPerKill, monMax,
+             hitChance: safespot ? 0 : hc,
+             dragonfire, poison, protected: isProt, safespot, safespotAuto };
   }
 
   // Full trip computation. ctx = { m, ttk, cycle, kph, lootBreakdown, dba,

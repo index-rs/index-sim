@@ -80,6 +80,13 @@ DEFAULT_ITEMS = [
     "gold_ore", "iron_ore", "mithril_ore", "adamantite_ore",
     "naturerune", "chaosrune", "deathrune", "lawrune",
     "airrune", "waterrune", "earthrune", "firerune",
+    # metal dragon (bronze/iron/steel) drops @289. dragon_platelegs isn't
+    # obtainable in game yet, so it has never traded — until a real sale shows
+    # up here it carries a flagged GUESS (see PLACEHOLDER_PRICES in
+    # gamedata.js); the first scraped price clears the flag automatically.
+    # runite_bar was previously only a hard-coded fallback in the ultra-rare
+    # table. NOT soulrune — fixed price in STATIC_PRICES (see EXCLUDE_EXPLICIT).
+    "dragon_platelegs", "runite_bar",
 ]
 
 

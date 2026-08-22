@@ -686,11 +686,21 @@
     // NPC magic defence uses the monster's MAGIC level, NOT its Defence level —
     // verified OSRS/rev274 mechanic: "NPC magic defence roll is calculated with
     // its magic level and magic defence bonus; the NPC's defence level doesn't
-    // matter against magic." Almost every melee monster (all dragons included)
-    // has magic level 1, so their high melee Defence does NOT shield them from
-    // spells — only the magic-defence BONUS does. (Blue dragon: magic lvl 1,
-    // magic def +60 → roll (1+9)(60+64)=1240, vs the old (95+9)(124)=12896.)
-    // Default 1 when no explicit magic level is set.
+    // matter against magic." Most melee monsters omit `magic=` in their npc
+    // config and so sit at level 1 — their high melee Defence does NOT shield
+    // them from spells, only the magic-defence BONUS does. (Blue dragon: no
+    // magic field → lvl 1, magic def +60 → roll (1+9)(60+64)=1240, vs the old
+    // (95+9)(124)=12896.) Default 1 when no explicit magic level is set.
+    //
+    // But a real `magic=` field is NOT rare, and it dominates this roll when
+    // present — the sim's monsters carrying one are green dragon (68), black
+    // dragon (100), the metal dragons (100), the wizards/druids (6–25), and a
+    // few explicit ZEROES (shadow warrior, trolls) that sit just below the
+    // default. `magicLevel` must be set from the config for any new monster;
+    // leaving it unset silently makes the monster ~10× easier to hit.
+    // Audited against every .npc in Content@289 — note `_unpack/<rev>/all.npc`
+    // files are DELTAS (225 is the base, later revs only carry what changed),
+    // so a block's absence from 274 means unchanged, not undefined.
     const monDefLvl = (input.combatType === 'magic')
       ? (m.magicLevel ?? 1)
       : (m.defLevel ?? 1);

@@ -23,7 +23,9 @@ const P = {
   // runes
   airrune:8, waterrune:6, earthrune:5, firerune:6, mindrune:4, bodyrune:3,
   chaosrune:95, deathrune:195, bloodrune:320, naturerune:265, lawrune:280,
-  cosmicrune:130, soulrune:400,
+  cosmicrune:130,
+  // soulrune is NOT here — it's a fixed price in STATIC_PRICES (see there for
+  // why it isn't scraped).
   // arrows/ammo
   bronze_arrow:2, iron_arrow:3, steel_arrow:18, mithril_arrow:40, rune_arrow:165,
   adamant_arrow:60, bolt:4, bronze_javelin:5, iron_javelin:8, steel_javelin:30,
@@ -77,6 +79,21 @@ const P = {
   cert_swordfish:220,
   // dragons
   chocolate_cake:350,
+  // Metal dragons (bronze/iron/steel, added @289). Their tables pull in a few
+  // items nothing else in the sim drops.
+  //   runite_bar / adamant_javelin / curry — plain placeholders, refreshed by
+  //     the price sync where the market carries them.
+  //   dragon_platelegs — the 1/1024 (bronze) / 1/512 (iron & steel) tertiary.
+  //     Brand new at rev 289, so it has NO market history yet and LC-bankvalue
+  //     doesn't know the item. There is NO market history to price it from —
+  //     5,000,000 is an explicit GUESS (top of the expected 1–5m range), not a
+  //     derived figure. It is registered in
+  //     PLACEHOLDER_PRICES below so the UI flags it, and the scraper key is
+  //     registered too, so the first real sale replaces it and clears the flag.
+  //     (For reference, its high alch is 162,000 — cost 270000 × 0.6 from
+  //     melee/platelegs.obj @289.)
+  dragon_platelegs:5000000,
+  runite_bar:6500, adamant_javelin:50, curry:20,
   // granite shield — tradeable (sold at market, not alch); scraped key granite_shield
   granite_shield:35000,
   // muddy key (chaos dwarf 7/128) — not market-traded; rough one-open EV of the
@@ -123,6 +140,18 @@ Object.assign(P, {
   // sibling tiers, so we deliberately seed NO knife/dart placeholders here —
   // a placeholder would mask the approximation.
   "adamant_arrow":80,
+});
+
+// ---- part-dose super potions ----------------------------------------
+// The metal-dragon tables drop supers at 1/2/3 doses (Content keys
+// `1dose2strength`, `2dose2defense`, `3dose2attack`). The sim only carries a
+// 4-dose price per super, so derive the part-dose values from it rather than
+// hard-coding a second set of numbers that the price sync can't reach. Dose
+// keys match the ones already used above ('3dose1defense' etc).
+Object.assign(P, {
+  '1dose2strength': Math.round((P.super_strength ?? 4667) * 1/4),
+  '2dose2defense':  Math.round((P.super_defence  ?? 1600) * 2/4),
+  '3dose2attack':   Math.round((P.super_attack   ?? 1600) * 3/4),
 });
 const gp = id => P[id] ?? 0;
 
@@ -190,6 +219,10 @@ const ALCH = {
   mithril_bar:180,
   // ice giant / chaos dwarf / shadow warrior additions @274
   mithril_longsword:780, iron_2h_sword:168, iron_platelegs:168, black_longsword:576,
+  // metal dragon (bronze/iron/steel) additions @289
+  adamant_2h_sword:3840, adamant_battleaxe:2496,
+  rune_mace:8640, rune_axe:7680, rune_battleaxe:24960,
+  dragon_platelegs:162000, runite_bar:3000,
 };
 
 // =====================================================================
@@ -659,7 +692,7 @@ const MONSTERS = [
       d('Cooked meat',1,1,'cooked_meat'), d('Flier',1,1,'flier'), d('Ring mould',1,1,'ring_mould'),
     ] },
 
-  { id:'dark_wizard', name:'Dark Wizard (lvl 7)', level:7, hp:12, attack:5, strength:2, defLevel:5, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
+  { id:'dark_wizard', name:'Dark Wizard (lvl 7)', level:7, hp:12, attack:5, strength:2, defLevel:5, magicLevel:6, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
       d('Staff',8,1,'plainstaff'),
@@ -678,7 +711,7 @@ const MONSTERS = [
       d('Water talisman',1,1,'water_talisman'), d('Fire talisman',1,1,'fire_talisman'),
     ] },
 
-  { id:'dark_wizard_20', name:'Dark Wizard (lvl 20)', level:20, hp:24, attack:17, strength:17, defLevel:14, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
+  { id:'dark_wizard_20', name:'Dark Wizard (lvl 20)', level:20, hp:24, attack:17, strength:17, defLevel:14, magicLevel:22, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
       d('Black wizard hat',4,1,'chefs_hat'), d('Staff',4,1,'plainstaff'), d('Black robe',3,1,'goblin_armour'),
@@ -695,7 +728,7 @@ const MONSTERS = [
       d('Water talisman',2,1,'water_talisman'), d('Fire talisman',2,1,'fire_talisman'),
     ] },
 
-  { id:'wizard', name:'Wizard', level:9, hp:14, attack:8, strength:8, defLevel:5, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
+  { id:'wizard', name:'Wizard', level:9, hp:14, attack:8, strength:8, defLevel:5, magicLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
       d('Staff',8,1,'plainstaff'), d('Wizard robe',7,1,'goblin_armour'), d('Blue wizard hat',3,1,'chefs_hat'),
@@ -820,7 +853,7 @@ const MONSTERS = [
       coins(23,8), coins(12,15), coins(2,30), coins(1,20),
     ] },
 
-  { id:'chaos_druid', name:'Chaos Druid', level:13, hp:20, attack:8, strength:8, defLevel:12, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'chaos_druid', name:'Chaos Druid', level:13, hp:20, attack:8, strength:8, defLevel:12, magicLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
       d('Law rune ×2',7,2,'lawrune'), d('Air rune ×36',3,36,'airrune'),
@@ -834,7 +867,7 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_taverly/configs/taverly.npc
-  { id:'druid', name:'Druid', level:33, hp:30, attack:28, strength:28, defLevel:32, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:0, strBonus:0, attackSpeed:4,
+  { id:'druid', name:'Druid', level:33, hp:30, attack:28, strength:28, defLevel:32, magicLevel:25, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:0, strBonus:0, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
       d('Earth rune ×27',4,27,'earthrune'), d('Water rune ×9',2,9,'waterrune'),
@@ -1067,7 +1100,7 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_ardougne_east/configs/legends_guild/legends_guild.npc
-  { id:'shadow_warrior', name:'Shadow Warrior', level:48, hp:67, attack:36, strength:33, defLevel:36, defStab:43, defSlash:31, defCrush:19, defRange:38, defMagic:15, attBonus:20, strBonus:26, attackSpeed:4,
+  { id:'shadow_warrior', name:'Shadow Warrior', level:48, hp:67, attack:36, strength:33, defLevel:36, magicLevel:0, defStab:43, defSlash:31, defCrush:19, defRange:38, defMagic:15, attBonus:20, strBonus:26, attackSpeed:4,
     loot:[
       always('Bones',1,'bones'),
       d('Adamant spear',1,1,'adamant_spear'), d('Black dagger (p)',1,1,'black_dagger'),
@@ -1150,7 +1183,7 @@ const MONSTERS = [
   // death_drop = big bones, guaranteed). Combat stats are OSRS-based 2004
   // approximations (rev274 npc configs aren't in the scripts repo): level 69,
   // 80 HP, slow + inaccurate, crush-resistant. Magic level 1 (melee monster).
-  { id:'mountain_troll', name:'Mountain Troll', level:69, hp:80, attack:71, strength:71, defLevel:71, magicLevel:1,
+  { id:'mountain_troll', name:'Mountain Troll', level:69, hp:80, attack:71, strength:71, defLevel:71, magicLevel:0,
     defStab:0, defSlash:0, defCrush:15, defRange:0, defMagic:0, attBonus:20, strBonus:20, attackSpeed:5,
     loot:[
       always('Big bones',1,'big_bones'),
@@ -1178,7 +1211,7 @@ const MONSTERS = [
   // hard but inaccurate, crush-resistant. Magic level 1 (melee monster).
   // (The guaranteed prison-key drop is a quest item, not lootable gp — omitted.)
   // NPC config @274: quests/quest_troll/configs/quest_troll.npc (magic/range def 200)
-  { id:'troll_general', name:'Troll General', level:113, hp:140, attack:70, strength:140, defLevel:40, magicLevel:1,
+  { id:'troll_general', name:'Troll General', level:113, hp:140, attack:70, strength:140, defLevel:40, magicLevel:0,
     defStab:35, defSlash:60, defCrush:35, defRange:200, defMagic:200, attBonus:60, strBonus:100, attackSpeed:5,
     loot:[
       always('Big bones',1,'big_bones'),
@@ -1375,7 +1408,7 @@ const MONSTERS = [
   { id:'baby_blue_dragon', name:'Baby blue dragon', level:48, hp:50, attack:40, strength:40, defLevel:40, defStab:30, defSlash:50, defCrush:50, defRange:30, defMagic:40, attackSpeed:4,
     loot:[ always('Babydragon bones',1,'babydragon_bones') ] },
 
-  { id:'green_dragon', name:'Green Dragon', level:79, hp:75, attack:68, strength:68, defLevel:68, dragonfire:true,
+  { id:'green_dragon', name:'Green Dragon', level:79, hp:75, attack:68, strength:68, defLevel:68, magicLevel:68, dragonfire:true,
     defStab:20, defSlash:40, defCrush:40, defRange:20, defMagic:30, attackSpeed:4,
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Green dragonhide',1,'dragonhide_green'),
@@ -1429,7 +1462,7 @@ const MONSTERS = [
       gemDrop(w(5)),
     ] },
 
-  { id:'black_dragon', name:'Black Dragon', level:227, hp:190, attack:200, strength:200, defLevel:200, dragonfire:true,
+  { id:'black_dragon', name:'Black Dragon', level:227, hp:190, attack:200, strength:200, defLevel:200, magicLevel:100, dragonfire:true,
     defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Black dragonhide',1,'dragonhide_black'),
@@ -1444,6 +1477,100 @@ const MONSTERS = [
       d('Adamantite bar',3,1,'adamantite_bar'), d('Chocolate cake',3,1,'chocolate_cake'),
       gemDrop(w(3)),
       ultrarareDrop(w(2)),
+    ] },
+
+  // =====================================================================
+  // METAL DRAGONS — bronze / iron / steel. PRE-EMPTIVE: added from
+  // LostCityRS/Content@289, which is ahead of the rev the rest of this file
+  // tracks. Verified sources:
+  //   stats  : scripts/_unpack/289/all.npc  [bronze_dragon] [iron_dragon] [steel_dragon]
+  //   loot   : scripts/drop tables/scripts/{bronze,iron,steel}_dragon.rs2
+  //   combat : scripts/areas/area_karamja/scripts/metal_dragon.rs2
+  // All three share a def profile (stab 50 / slash 70 / crush 70 / range 90 /
+  // magic 30) — note range 90 is HIGH, so these punish ranging. The low magic
+  // BONUS of 30 does NOT make them free magic targets though: unlike the
+  // chromatic dragons (no `magic=` field → level 1), they declare magic=100,
+  // and the NPC magic defence roll is (magic level + 9) × (magic def + 64).
+  // That's magicLevel:100 below, and it costs them ~11× the magic defence a
+  // level-1 dragon would have. Magic is still their soft side, just not free.
+  // attackrange=10, huntmode=cowardly, no respawnrate field (→ server default).
+  //
+  // Their dragonfire is NOT the chromatic dragons' melee-range breath: out of
+  // melee range they use ~metal_dragon_dragonfire_far, so a safespot stops the
+  // melee but NOT the breath. In melee range 1/4 of attacks are breath and 3/4
+  // are the headbutt. ~metal_dragon_breath_maxhit: base 30, +20 when the
+  // dragon's magic attack roll beats your slash defence roll, REPLACED by 5 by
+  // the anti-dragon shield, then −15 from an antifire potion (floored at 0) —
+  // and prot-magic does not apply. Modelled via dragonfireMax/dragonfireRate
+  // in trip.js; see computeIncoming there.
+  //
+  // No spawns exist in Content@289's maps yet and dragon platelegs have no
+  // market history, so kill-rate and platelegs value are the soft numbers here.
+
+  { id:'bronze_dragon', name:'Bronze dragon', level:131, hp:112, attack:112, strength:112, defLevel:112,
+    dragonfire:true, dragonfireRanged:true, dragonfireMax:30, dragonfireRate:0.25, magicLevel:100,
+    defStab:50, defSlash:70, defCrush:70, defRange:90, defMagic:30, attackSpeed:4,
+    loot:[
+      always('Dragon bones',1,'dragon_bones'), always('Bronze bar ×5',5,'bronze_bar'),
+      // tertiary, rolled BEFORE the table and returning early (so it replaces
+      // the normal drop, not stacks with it): random(1024) = 0.
+      d('Dragon platelegs',1,1,'dragon_platelegs',1024),
+      d('Rune longsword',1,1,'rune_longsword'), d('Adamant dart(p) ×16',1,16,'adamant_dart'),
+      d('Mithril 2h sword',4,1,'mithril_2h_sword'), d('Mithril axe',3,1,'mithril_axe'),
+      d('Mithril battleaxe',3,1,'mithril_battleaxe'), d('Rune knife ×2',3,2,'rune_knife'),
+      d('Mithril kiteshield',1,1,'mithril_kiteshield'), d('Adamant platebody',1,1,'adamant_platebody'),
+      d('Adamant javelin ×30',20,30,'adamant_javelin'), d('Fire rune ×50',8,50,'firerune'),
+      d('Bolts ×6',6,6,'bolt'),   // random(12)+1 → 1..12, avg 6.5
+      d('Law rune ×10',5,10,'lawrune'), d('Blood rune ×15',3,15,'bloodrune'),
+      d('Law rune ×25',1,25,'lawrune'),
+      coins(40,196), coins(10,330), coins(1,690),
+      d('Adamantite bar',3,1,'adamantite_bar'),
+      d('Swordfish ×2',2,2,'swordfish'), d('Swordfish',1,1,'swordfish'),
+      gemDrop(w(4)),
+      ultrarareDrop(w(1)),
+      // 122..127 (6/128) = nothing
+    ] },
+
+  { id:'iron_dragon', name:'Iron dragon', level:189, hp:165, attack:165, strength:165, defLevel:165,
+    dragonfire:true, dragonfireRanged:true, dragonfireMax:30, dragonfireRate:0.25, magicLevel:100,
+    defStab:50, defSlash:70, defCrush:70, defRange:90, defMagic:30, attackSpeed:4,
+    loot:[
+      always('Dragon bones',1,'dragon_bones'), always('Iron bar ×5',5,'iron_bar'),
+      d('Dragon platelegs',1,1,'dragon_platelegs',512),   // random(512) = 0
+      d('Rune dart(p) ×9',7,9,'rune_dart'), d('Adamant 2h sword',4,1,'adamant_2h_sword'),
+      d('Adamant axe',3,1,'adamant_axe'), d('Adamant battleaxe',3,1,'adamant_battleaxe'),
+      d('Rune knife ×5',3,5,'rune_knife'), d('Adamant sq shield',1,1,'adamant_sq_shield'),
+      d('Rune med helm',1,1,'rune_med_helm'), d('Rune battleaxe',1,1,'rune_battleaxe'),
+      d('Rune javelin ×4',20,4,'rune_javelin'), d('Blood rune ×15',19,15,'bloodrune'),
+      d('Bolts ×7',6,7,'bolt'),   // random(11)+2 → 2..12, avg 7
+      d('Soul rune ×3',5,3,'soulrune'),
+      coins(20,270), coins(10,550), coins(1,990),
+      d('Super strength(1)',8,1,'1dose2strength'),
+      d('Adamantite bar ×2',3,2,'adamantite_bar'), d('Curry',3,1,'curry'),
+      ultrarareDrop(w(2)),
+      gemDrop(w(3)),
+      // 123..127 (5/128) = nothing
+    ] },
+
+  { id:'steel_dragon', name:'Steel dragon', level:246, hp:210, attack:215, strength:215, defLevel:215,
+    dragonfire:true, dragonfireRanged:true, dragonfireMax:30, dragonfireRate:0.25, magicLevel:100,
+    defStab:50, defSlash:70, defCrush:70, defRange:90, defMagic:30, attackSpeed:4,
+    loot:[
+      // death_drop (dragon_bones) AND an explicit second dragon_bones in
+      // steel_dragon.rs2 — steel dragons really do drop two sets.
+      always('Dragon bones ×2',2,'dragon_bones'), always('Steel bar ×5',5,'steel_bar'),
+      d('Dragon platelegs',1,1,'dragon_platelegs',512),   // random(512) = 0
+      d('Rune dart(p) ×12',7,12,'rune_dart'), d('Rune mace',4,1,'rune_mace'),
+      d('Adamant kiteshield',2,1,'adamant_kiteshield'), d('Rune knife ×7',3,7,'rune_knife'),
+      d('Rune axe',2,1,'rune_axe'), d('Rune full helm',1,1,'rune_full_helm'),
+      d('Blood rune ×20',19,20,'bloodrune'), d('Rune javelin ×7',20,7,'rune_javelin'),
+      d('Bolts ×7',6,7,'bolt'),   // random(11)+2 → 2..12, avg 7
+      d('Soul rune ×5',5,5,'soulrune'),
+      coins(17,470), coins(5,650),
+      d('Super attack(3)',13,1,'3dose2attack'), d('Runite bar',3,1,'runite_bar'),
+      d('Super defence(2)',3,1,'2dose2defense'),
+      d('Curry',1,1,'curry'), d('Curry ×2',1,2,'curry'),
+      // no gem / ultra-rare roll on this table; 112..127 (16/128) = nothing
     ] },
 
   // Ghoul — area_mortmyre/configs/mortmyre.npc [ghoul] @274: lvl 42, hp 50,
@@ -1530,6 +1657,9 @@ const MONSTER_CLUES = {
   blue_dragon:   ['hard'],
   red_dragon:    ['hard'],   // ~trail_hardcluedrop in red_dragon.rs2
   black_dragon:  ['hard'],
+  bronze_dragon: ['hard'],   // ~trail_hardcluedrop(128) @289
+  iron_dragon:   ['hard'],   // ~trail_hardcluedrop(128) @289
+  steel_dragon:  ['hard'],   // ~trail_hardcluedrop(64)  @289 — double rate
   elf_warrior_90:  ['hard'],   // ~trail_hardcluedrop in regicide_darkelf.rs2
   elf_warrior_108: ['hard'],   // shares the elf_warrior table
 };
@@ -1609,6 +1739,9 @@ const MONSTER_RESPAWN = {
   //  highwayman, hobgoblin_unarmed, hobgoblin_armed, bandit, mountain_troll:
   //     present in configs (all.npc / bandit_camp.npc) but the respawnrate field
   //     is OMITTED → they inherit the server default in-game.
+  //  bronze_dragon, iron_dragon, steel_dragon:
+  //     present in _unpack/289/all.npc but with NO respawnrate field → they
+  //     inherit the server default in-game.
   //  troll_general, dagannoth, dagannoth_92, rock_crab, ghoul,
   //  elf_warrior_90, elf_warrior_108:
   //     their quest/area configs (quest_troll, quest_horror, rock crab spawn,
@@ -1625,6 +1758,11 @@ for (const m of MONSTERS) {
 // =====================================================================
 const STATIC_PRICES = {
   rune_javelin:   100,   // no one buys these
+  // Soul rune (iron & steel dragons @289) — store price. Deliberately NOT
+  // scraped: what sales exist are ones and twos to players who need them for a
+  // quest and can't reach the store that stocks them, so a scraped average
+  // prices that one buyer's need rather than a stack off a dragon.
+  soulrune:      1250,
   mind_talisman:  500, earth_talisman: 500, air_talisman: 500,
   fire_talisman:  500, body_talisman: 500, cosmic_talisman:500,
   // chaos & nature talisman and ring of recoil are now SCRAPED from the live
@@ -1633,6 +1771,39 @@ const STATIC_PRICES = {
   // recoil supply cost in trip.js (?? 1500).
 };
 Object.assign(P, STATIC_PRICES);
+
+// =====================================================================
+// PLACEHOLDER PRICES — keys whose value in P is an admitted GUESS, not a
+// market figure or a derived one. The UI flags these so nobody reads an
+// invented number as real.
+//
+// A key belongs here only while BOTH are true: the item has no market
+// history to price from, and its value matters enough to the sim that
+// leaving it at 0 would distort a drop table. The flag clears itself:
+// isPlaceholderPrice() checks the live scraped-key set, so the moment a
+// real sale lands in prices.json the marker disappears with no code edit.
+// When that happens, delete the guess from P too — a stale guess sitting
+// behind a real price is how a placeholder quietly becomes permanent.
+// =====================================================================
+// The value is the FULL tooltip text, shown verbatim on hover — not a fragment
+// composed into a sentence elsewhere, so what you read here is what ships.
+const PLACEHOLDER_PRICES = {
+  // Guess: 5,000,000 (expected 1–5m). High alch is 162,000 if you ever want
+  // the defensible floor instead.
+  dragon_platelegs: 'Placeholder price — item added next update (289). This is a guess, not a market value. It will update automatically once the item is traded.',
+};
+// True when `key` is still showing its guessed price. Once market.js has seen
+// a real scraped price for the key, this returns false forever after.
+function isPlaceholderPrice(key){
+  if (!key || !(key in PLACEHOLDER_PRICES)) return false;
+  try {
+    const scraped = typeof window !== 'undefined' && window.getScrapedPriceKeys
+      ? window.getScrapedPriceKeys() : null;
+    if (scraped && scraped.has(key)) return false;
+  } catch(_){ /* market.js not loaded yet — still a placeholder */ }
+  return true;
+}
+function placeholderPriceNote(key){ return PLACEHOLDER_PRICES[key] || ''; }
 
 // =====================================================================
 // DEFAULT LOOT ACTIONS — sensible per-item defaults so the user doesn't
@@ -1664,6 +1835,10 @@ const SKIP_DEFAULTS = new Set([
   // javelins
   'bronze javelin','iron javelin','black javelin','steel javelin',
   'mithril javelin','adamant javelin',
+  // rune javelin (iron & steel dragons @289) — same story as the rest of the
+  // family: STATIC_PRICES prices it at 100 with "no one buys these", and
+  // scrape_prices excludes it. Don't bank what you can't sell.
+  'rune javelin',
   // bolts (generic)
   'bolt','bolts','bronze bolts','iron bolts','steel bolts',
   // fishing-themed junk (dagannoth table) — not worth banking
@@ -1689,6 +1864,7 @@ const FOOD_DEFAULTS = new Set([
   'sardine','mackerel','cod','pike','anchovies','shrimps','cooked meat',
   'cooked chicken','bread','cake','stew','raw bass','raw tuna','raw lobster',
   'raw swordfish','raw shark','raw herring','raw sardine','raw salmon','raw trout',
+  'curry',
 ]);
 
 // Tiered metal equipment → alch by default, but skip if alch value < 350.
@@ -1697,6 +1873,9 @@ const TIER_PREFIXES = ['bronze','iron','black','steel','mithril','adamant'];
 const RUNE_ALCH_WEAPONS = new Set([
   'rune dagger','rune warhammer','rune mace','rune spear',
   'rune battleaxe','rune longsword','rune sword',
+  // rune axe (steel dragon @289) — a woodcutting hatchet, alch-only like the
+  // rest of this list; nobody buys them in bulk.
+  'rune axe',
 ]);
 // Shop-stocked staves. They carry a market listing but nobody buys them in
 // bulk — the general store sells them endlessly, so the listing is a hope, not
@@ -1835,6 +2014,9 @@ window.GameData = {
   isBulkUnsellable,
   casketValue,
   STATIC_PRICES,
+  PLACEHOLDER_PRICES,
+  isPlaceholderPrice,
+  placeholderPriceNote,
 };
 
 })();

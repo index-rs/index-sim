@@ -607,7 +607,19 @@
     try {
       const p = JSON.parse(localStorage.getItem('sim_prices_v1') || 'null');
       const a = JSON.parse(localStorage.getItem('sim_alch_v1') || 'null');
-      if (p) for (const [k,v] of Object.entries(p)) if (v>0 && priceAllowed(k)) window.GameData.ITEM_PRICES[k]=v;
+      // Placeholder prices are skipped: they're admitted guesses that live in
+      // gamedata.js, and sim_prices_v1 is the FULL ITEM_PRICES map, so a
+      // snapshot taken under an OLD guess would shadow the current one forever
+      // — the guess could never be revised for anyone who'd already run the
+      // sim. isPlaceholderPrice() goes false as soon as the key has a real
+      // scraped price (the scraped-key set is seeded from localStorage before
+      // this runs), so genuine market data still restores normally.
+      const isPh = window.GameData.isPlaceholderPrice;
+      if (p) for (const [k,v] of Object.entries(p)){
+        if (!(v>0) || !priceAllowed(k)) continue;
+        if (isPh && isPh(k)) continue;
+        window.GameData.ITEM_PRICES[k]=v;
+      }
       if (a && window.GameData.ALCH_VALUES) for (const [k,v] of Object.entries(a)) window.GameData.ALCH_VALUES[k]=v;
       // Restore scrape timestamp
       const ts = localStorage.getItem('sim_scraped_at_v1');
