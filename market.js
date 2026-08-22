@@ -19,6 +19,17 @@
     const seed = JSON.parse(localStorage.getItem(SCRAPED_KEYS_LS) || '[]');
     if (Array.isArray(seed)) seed.forEach(k => _scrapedKeys.add(k));
   } catch(_){}
+  // Bulk-unsellable gear must never carry a sale price, whatever the source —
+  // a live scrape, a prices.json load, or the persisted cache. The engine
+  // values these at alch minus a nature rune regardless, so a market figure
+  // here is decoration that contradicts the sim. Single choke point so no
+  // future price path can quietly reintroduce them.
+  function priceAllowed(key){
+    const G = window.GameData;
+    if (!G || !G.isBulkUnsellable) return true;
+    return !G.isBulkUnsellable(String(key).replace(/_/g, ' '));
+  }
+
   function noteScrapedKeys(obj){
     if (!obj || typeof obj !== 'object') return;
     let added = false;
@@ -221,7 +232,7 @@
       if (!slug) continue;
       const { price, alch } = await fetchItemData(slug, 5);
       if (price !== null && price > 0){
-        window.GameData.ITEM_PRICES[key] = price;
+        if (priceAllowed(key)) window.GameData.ITEM_PRICES[key] = price;
         results[key] = price;
         synced++;
       } else {
@@ -261,7 +272,7 @@
              'loop_half_key','tooth_half_key','cosmic_talisman'],
     herb: ['herb_guam','herb_marrentill','herb_tarromin','herb_harralander',
            'herb_ranarr','herb_irit','herb_avantoe','herb_kwuarm',
-           'herb_cadantine','herb_lantadyme','herb_dwarf_weed','unidentified_guam'],
+           'herb_cadantine','herb_lantadyme','herb_dwarf_weed'],
   };
 
   // Collect every unique item key across ALL monsters' loot tables,
@@ -398,6 +409,18 @@
   // items (they were never really worth this) — purge every matching point so the
   // Economy tab stops showing a bogus swing. Runs once per browser.
   const NON_MARKET_STATIC = { granite_shield: 35000, super_antipoison: 760, mcannonball: 180, cannonball: 180, chaos_talisman: 500 };
+  const HISTORY_SANITIZED_V5_KEY = 'sim_price_history_sanitized_v5';
+  // Bulk-unsellable gear that nonetheless carried a shipped price. See the V5
+  // block below — these keys are purged outright rather than by value.
+  const BULK_DEAD_PRICED_KEYS = ['mithril_spear', 'rune_dagger', 'magic_staff'];
+  const HISTORY_SANITIZED_V6_KEY = 'sim_price_history_sanitized_v6';
+  // V6 finishes what V5 started: EVERY bulk-unsellable key stops carrying a
+  // sale price, not just the three worst. The engine has always valued these
+  // at alch minus a nature rune (isBulkUnsellable zeroes the sale value), so
+  // the market figure drove nothing — it only made the Economy tab imply you
+  // could move a stack of adamant platebodies at 15k each. Rather than list
+  // them, ask gamedata: any key whose name maps back to a bulk-unsellable item
+  // goes. The basic elemental staves are in that set as of 2026-08-21.
   function sanitizePriceHistory(){
     try {
       const hist = loadPriceHistory();
@@ -447,6 +470,64 @@
         }
         localStorage.setItem(HISTORY_SANITIZED_V4_KEY, '1');
       }
+      if (!localStorage.getItem(HISTORY_SANITIZED_V5_KEY)){
+        // Bulk-unsellable items that were hand-set to a market price they can't
+        // actually fetch (mithril spear 10k, rune dagger 15k — both entered
+        // 2026-06-25). isBulkUnsellable already zeroes their sale value, so the
+        // numbers never touched gp/kill, but they still showed in the Economy
+        // tab as if you could sell one. The magic staff joins them now that it's
+        // recognised as shop-stocked. Purge the KEY outright, not a specific
+        // value — there is no price for these that would be honest.
+        for (const snap of hist){
+          if (!snap || !snap.prices) continue;
+          for (const k of BULK_DEAD_PRICED_KEYS){
+            if (k in snap.prices){ delete snap.prices[k]; changed = true; }
+          }
+        }
+        // Also drop them from the persisted cache and the scraped-key registry,
+        // or restorePersistedPrices would put them straight back on next load.
+        try {
+          const p = JSON.parse(localStorage.getItem('sim_prices_v1') || 'null');
+          if (p){
+            let dirty = false;
+            for (const k of BULK_DEAD_PRICED_KEYS) if (k in p){ delete p[k]; dirty = true; }
+            if (dirty) localStorage.setItem('sim_prices_v1', JSON.stringify(p));
+          }
+        } catch(_){}
+        let dropped = false;
+        for (const k of BULK_DEAD_PRICED_KEYS) if (_scrapedKeys.delete(k)) dropped = true;
+        if (dropped){
+          try { localStorage.setItem(SCRAPED_KEYS_LS, JSON.stringify([..._scrapedKeys])); } catch(_){}
+        }
+        localStorage.setItem(HISTORY_SANITIZED_V5_KEY, '1');
+      }
+      if (!localStorage.getItem(HISTORY_SANITIZED_V6_KEY)){
+        const isDead = (k) => {
+          const G = window.GameData;
+          if (!G || !G.isBulkUnsellable) return false;
+          return G.isBulkUnsellable(String(k).replace(/_/g, ' '));
+        };
+        for (const snap of hist){
+          if (!snap || !snap.prices) continue;
+          for (const k of Object.keys(snap.prices)){
+            if (isDead(k)){ delete snap.prices[k]; changed = true; }
+          }
+        }
+        try {
+          const p = JSON.parse(localStorage.getItem('sim_prices_v1') || 'null');
+          if (p){
+            let dirty = false;
+            for (const k of Object.keys(p)) if (isDead(k)){ delete p[k]; dirty = true; }
+            if (dirty) localStorage.setItem('sim_prices_v1', JSON.stringify(p));
+          }
+        } catch(_){}
+        let pruned = false;
+        for (const k of [..._scrapedKeys]) if (isDead(k) && _scrapedKeys.delete(k)) pruned = true;
+        if (pruned){
+          try { localStorage.setItem(SCRAPED_KEYS_LS, JSON.stringify([..._scrapedKeys])); } catch(_){}
+        }
+        localStorage.setItem(HISTORY_SANITIZED_V6_KEY, '1');
+      }
       if (changed) localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
     } catch(_){}
   }
@@ -463,7 +544,7 @@
     if (!window.GameData) return 0;
     let n = 0;
     for (const [k,v] of Object.entries(prices || {})){
-      if (typeof v === 'number' && v > 0){ window.GameData.ITEM_PRICES[k] = v; n++; }
+      if (typeof v === 'number' && v > 0 && priceAllowed(k)){ window.GameData.ITEM_PRICES[k] = v; n++; }
     }
     noteScrapedKeys(prices);
     // Persist scrape timestamp if the incoming prices carry one.
@@ -526,7 +607,7 @@
     try {
       const p = JSON.parse(localStorage.getItem('sim_prices_v1') || 'null');
       const a = JSON.parse(localStorage.getItem('sim_alch_v1') || 'null');
-      if (p) for (const [k,v] of Object.entries(p)) if (v>0) window.GameData.ITEM_PRICES[k]=v;
+      if (p) for (const [k,v] of Object.entries(p)) if (v>0 && priceAllowed(k)) window.GameData.ITEM_PRICES[k]=v;
       if (a && window.GameData.ALCH_VALUES) for (const [k,v] of Object.entries(a)) window.GameData.ALCH_VALUES[k]=v;
       // Restore scrape timestamp
       const ts = localStorage.getItem('sim_scraped_at_v1');

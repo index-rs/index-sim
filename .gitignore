@@ -1,4 +1,5 @@
 deploy
 simulator.zip
-scrape_prices.py
 backup
+
+__pycache__/

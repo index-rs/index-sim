@@ -1066,7 +1066,6 @@
     const alchAllowed = !!(input.trip && input.trip.alching);
     const alchVals   = window.GameData?.ALCH_VALUES ?? {};
     const natCost    = window.GameData?.ITEM_PRICES?.naturerune ?? 265;
-    const herbUnidGp = window.GameData?.ITEM_PRICES?.unidentified_guam ?? 15;
     let gpPerKill = 0;
     let prayerXpPerKill = 0;
     let alchCastsPerKill = 0;
@@ -1123,7 +1122,6 @@
       const gd = window.GameData;
       if      (effPref === 'skip') unitGp = 0;
       else if (effPref === 'bury') unitGp = 0;
-      else if (effPref === 'unid') unitGp = isHerb ? herbUnidGp : saleValue;
       else if (effPref === 'value') unitGp = isHerb ? (gd?.HERB_EV_HIGH ?? saleValue)
         : drop.tag === 'gem' ? (input.ringOfWealth ? (gd?.GEM_EV_ROW_HIGH ?? saleValue) : (gd?.GEM_EV_BASE_HIGH ?? saleValue))
         : saleValue;

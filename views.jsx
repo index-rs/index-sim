@@ -1499,9 +1499,6 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
   const dropsRaw     = [...result.lootBreakdown].sort((a,b)=>b.evGp-a.evGp);
   const natCost      = window.GameData?.ITEM_PRICES?.naturerune ?? 265;
 
-  // Unidentified herb price (2004 sold herbs as "unidentified herb" in 11-stacks)
-  const herbUnidPrice = window.GameData?.ITEM_PRICES?.unidentified_guam ?? 15;
-
   // 'value' pref (high-value-only): leave sub-table rolls worth <= threshold on
   // the ground. EVs come pre-filtered from GameData.
   const valueThreshold = window.GameData?.VALUE_THRESHOLD ?? 2000;
@@ -1509,15 +1506,9 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
   const gemEvBaseHigh  = window.GameData?.GEM_EV_BASE_HIGH ?? 0;
   const gemEvRowHigh   = window.GameData?.GEM_EV_ROW_HIGH ?? 0;
 
-  // Per-drop herb override: when a herb's pref is 'unid', value it at the
-  // unidentified guam price (2004 had no grimy herbs — herbs dropped as
-  // "unidentified herb" and were sold in 11-stacks at the unid price).
+  // Per-drop sub-table override for the 'value' pref.
   const drops = dropsRaw.map(d => {
     const p = d.pref ?? lootPrefs[d.name];
-    if (d.tag === 'herb' && p === 'unid'){
-      const ev = d.chance * d.qtyAvg * herbUnidPrice;
-      return {...d, price: herbUnidPrice, evGp: ev, _herbUnid:true};
-    }
     if ((d.tag === 'herb' || d.tag === 'gem') && p === 'value'){
       const unit = d.tag === 'herb' ? herbEvHigh
         : (input.ringOfWealth ? gemEvRowHigh : gemEvBaseHigh);
@@ -1572,7 +1563,6 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
     // values a looted bulk item at its alch value, no in-trip cast-time cost). So
     // offer 'loot' for everything except plain (non-dragon) bones.
     if (!d.isBone || /dragon/i.test(d.name)) o.push('loot');
-    if (d.tag === 'herb') o.push('unid');
     if (d.tag === 'herb' || d.tag === 'gem') o.push('value');
     if (canAlch(d)) o.push('alch');
     if (d.isBone && !/dragon/i.test(d.name)) o.push('bury');
@@ -1619,7 +1609,7 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
   const optimize = () => {
     let prefs = {...lootPrefs};
     // Optimize ordinary drops plus the herb/jewel sub-tables (they now have
-    // real choices: loot / unid / value / skip). Other expandable sub-tables
+    // real choices: loot / value / skip). Other expandable sub-tables
     // (casket, ultra-rare, mega) are loot-or-nothing, so leave them at default.
     const items = drops.filter(d => !(d.isBone && !/dragon/i.test(d.name))
       && (!Array.isArray(d._expand) || d.tag === 'herb' || d.tag === 'gem'));
@@ -1809,9 +1799,6 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                     </button>
                   ) : d.name}
                   {isBone && <span style={{marginLeft:6, color:'var(--violet)', fontSize:10}}>· {d.prayerXp}xp/bury</span>}
-                  {d.tag === 'herb' && lootPrefs[d.name]==='unid' && (
-                    <div style={{fontSize:9, color:'var(--teal)', marginTop:2}}>sold as unidentified · {herbUnidPrice}gp ea</div>
-                  )}
                   {(d.tag === 'herb' || d.tag === 'gem') && pref==='value' && (
                     <div style={{fontSize:9, color:'var(--green)', marginTop:2}}>high-value only · rolls under {fmtInt(valueThreshold)}gp left on ground</div>
                   )}
@@ -1855,8 +1842,13 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                 </td>
                 <td className="right num">{fmtPct(d.chance)}</td>
                 <td className="right num">×{d.qtyAvg}</td>
-                <td className="right num">{fmtInt(d.price)}</td>
-                <td className="right num" style={{color: alchProfit>d.price?'var(--green)':'var(--text-3)'}}>
+                {/* Bulk-unsellable gear has no sale price — nobody buys these in
+                    stacks, so the engine pays out alch value only. Showing a
+                    market figure here would claim a value the sim rejects. */}
+                <td className="right num" title={d.bulkDead ? 'not sellable in bulk — alch value only' : undefined}>
+                  {d.bulkDead ? '—' : fmtInt(d.price)}
+                </td>
+                <td className="right num" style={{color: alchProfit>(d.bulkDead?0:d.price)?'var(--green)':'var(--text-3)'}}>
                   {d.alchValue ? fmtInt(alchProfit) : '—'}
                 </td>
                 <td><div style={{display:'flex', alignItems:'center', gap:8}}>
@@ -1866,7 +1858,6 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                 <td onMouseEnter={(ev)=>showHover(d, i, ev)} onMouseLeave={()=>setHover(null)} style={{position:'relative'}}>
                   <div style={{display:'flex', gap:4}}>
                     {(!isBone || /dragon/i.test(d.name)) && prefBtn(d.name,'loot',pref==='loot','teal')}
-                    {d.tag==='herb' ? prefBtn(d.name,'unid',pref==='unid','blue') : null}
                     {(d.tag==='herb'||d.tag==='gem') ? prefBtn(d.name,'value',pref==='value','green',`≥${fmtInt(valueThreshold)}`) : null}
                     {canAlch(d) ? prefBtn(d.name,'alch',pref==='alch','amber') : null}
                     {isBone ? prefBtn(d.name,'bury',pref==='bury','violet') : null}
@@ -1927,7 +1918,7 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
           const pref = d.pref ?? lootPrefs[d.name] ?? 'loot';
           if (pref === 'skip' || pref === 'bury') return 0;
           if (pref === 'alch') return d.chance * d.qtyAvg * Math.max(0, (d.alchValue||0) - natCost);
-          return d.evGp;   // loot / unid (evGp already adjusted for unid herbs)
+          return d.evGp;   // loot / value
         };
         const parts = drops.map(d => ({ name:d.name, tag:d.tag, gp:contrib(d),
             pref: d.pref ?? lootPrefs[d.name] ?? 'loot' }))
@@ -1963,7 +1954,7 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
                 <div key={i} style={{display:'flex', alignItems:'center', gap:8, fontFamily:'var(--mono)', fontSize:10}}>
                   <span style={{width:9, height:9, borderRadius:2, flexShrink:0, background: p._other?'var(--text-4)':palette[i%palette.length]}} />
                   <span style={{flex:1, color: p._other?'var(--text-3)':'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
-                    {p.name}{p.pref==='alch'?<span style={{color:'var(--amber)'}}> (alch)</span>:p.pref==='unid'?<span style={{color:'var(--blue)'}}> (unid)</span>:p.pref==='value'?<span style={{color:'var(--green)'}}> (value)</span>:null}
+                    {p.name}{p.pref==='alch'?<span style={{color:'var(--amber)'}}> (alch)</span>:p.pref==='value'?<span style={{color:'var(--green)'}}> (value)</span>:null}
                   </span>
                   <span className="num" style={{color:'var(--gold)', minWidth:54, textAlign:'right'}}>{fmtInt(p.gp)}</span>
                   <span className="num" style={{color:'var(--text-2)', minWidth:42, textAlign:'right'}}>{(p.gp/total*100).toFixed(1)}%</span>
@@ -3061,7 +3052,6 @@ const ECO_NAME_FIX = {
 // Economy display-name overrides — win over the loot-derived name map AND
 // ECO_NAME_FIX. For renames the raw loot/price keys get "wrong" for this tab.
 const ECO_NAME_OVERRIDE = {
-  unidentified_guam: 'Unidentified herb',
   herb_ranarr:       'Ranarr weed',
   guam_leaf:         'Guam leaf',
 };
@@ -3501,7 +3491,17 @@ function SetupBar({input, set}){
 function CombatWorkbench(){
   const [input, setInput] = useState(() => loadSavedInput() || makeDefaults('melee'));
   const [lootPrefs, setLootPrefs] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_PREFS) || '{}'); } catch { return {}; }
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_PREFS) || '{}');
+      // The 'unid' herb pref is gone (herbs are now loot / ≥threshold / skip).
+      // Its price came from a blended "unidentified herb" figure nothing
+      // upstream can refresh, so it sat frozen. Drop the stored override and
+      // let those herbs fall back to their default action.
+      let dropped = false;
+      for (const k in saved) if (saved[k] === 'unid'){ delete saved[k]; dropped = true; }
+      if (dropped) try { localStorage.setItem(LS_PREFS, JSON.stringify(saved)); } catch {}
+      return saved;
+    } catch { return {}; }
   });
   // Gear-tier declutter prefs (Settings) — global UI pref, kept OUT of the
   // per-loadout input so it doesn't churn with setup switching.

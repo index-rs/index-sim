@@ -83,14 +83,13 @@ const P = {
   // lava-maze Muddy chest (runes/gems/coins), ignoring the trip to use it.
   muddy_key:800,
   // average herb/gem EV (used for ~randomherb/~randomjewel)
-  _randomherb_avg: 220,
 };
 
 // ---- scraped market prices (overrides the placeholders above) -------
 // Keyed to LostCity item config ids. Re-scrape updates these in place.
 // Food prices drive the trip model's supply cost.
 Object.assign(P, {
-  "_randomherb_avg":1890,"adamant_arrow":133,"adamant_full_helm":5000,"adamant_kiteshield":8400,
+  "adamant_arrow":133,"adamant_full_helm":5000,"adamant_kiteshield":8400,
   "adamant_platelegs":26000,"adamantite_bar":4750,"adamantite_ore":851,"airrune":30,"ashes":206,
   "big_bones":390,"bloodrune":775,"bodyrune":14,"bronze_arrow":15,"chaosrune":133,"coal":530,
   "cosmicrune":245,"cow_hide":510,"deathrune":218,"dragon_bones":2504,"dragon_longsword":126000,
@@ -110,7 +109,7 @@ Object.assign(P, {
   "rune_sq_shield":35880,"shark":785,"silver_ore":308,"snape_grass":1141,"steel_arrow":29,
   "steel_bar":1470,"swordfish":306,"tooth_half_key":110000,"tuna":108,"uncut_diamond":4100,
   "uncut_emerald":4140,"uncut_ruby":2800,"uncut_sapphire":1400,"unicorn_horn_dust":2260,
-  "unidentified_guam":1840,"vial_water":347,"water_talisman":500,"waterrune":17,
+  "vial_water":347,"water_talisman":500,"waterrune":17,
   "weapon_poison":8800,"white_berries":1330,
   // food not yet in scraper — reasonable 2004-era market values
   "trout":35,"salmon":80,"bass":520,
@@ -159,37 +158,38 @@ P.casket = casketValue();
 // nature rune costs 265 gp → profit = alch - 265
 const ALCH = {
   // rune
-  rune_full_helm:20160, rune_med_helm:11520, rune_chainbody:29952,
-  rune_scimitar:15360,  rune_longsword:19200, rune_dagger:4608, rune_2h_sword:38400,
+  rune_full_helm:21120, rune_med_helm:11520, rune_chainbody:30000,
+  rune_scimitar:15360,  rune_longsword:19200, rune_dagger:4800, rune_2h_sword:38400,
   // adamant
-  adamant_platelegs:9600, adamant_platebody:16128, adamant_full_helm:2112,
-  adamant_spear:3120, adamant_kiteshield:2688,
+  adamant_platelegs:3840, adamant_platebody:7680, adamant_full_helm:2112,
+  adamant_spear:1248, adamant_kiteshield:3264,
   // mithril
-  mithril_sq_shield:1170, mithril_kiteshield:1560, mithril_chainbody:2400,
-  mithril_sword:780, mithril_mace:630, mithril_axe:312, mithril_2h_sword:1560,
-  mithril_battleaxe:1248, mithril_spear:1200,
+  mithril_sq_shield:936, mithril_kiteshield:1326, mithril_chainbody:1170,
+  mithril_sword:507, mithril_mace:351, mithril_axe:312, mithril_2h_sword:1560,
+  mithril_battleaxe:1014, mithril_spear:507,
   // green d'hide armour (high_alch = floor(cost*0.6); body cost 7800, chaps 3900)
   dragonhide_body:4680, dragonhide_chaps:2340,
   // steel
-  steel_full_helm:240, steel_med_helm:120, steel_kiteshield:168, steel_platelegs:480,
-  steel_battleaxe:240, steel_longsword:192, steel_scimitar:120,
-  steel_axe:96, steel_2h_sword:240, steel_sword:150,
+  steel_full_helm:330, steel_med_helm:180, steel_kiteshield:510, steel_platelegs:600,
+  steel_battleaxe:390, steel_longsword:300, steel_scimitar:240,
+  steel_axe:120, steel_2h_sword:600, steel_sword:195,
   // troll-drop gear (approx, tier-consistent with the lists above)
-  steel_warhammer:240, black_warhammer:576, adamant_warhammer:3120, adamant_med_helm:1248,
-  steel_platebody:720, mithril_platebody:2340, adamant_axe:480, adamant_sq_shield:1152,
-  rune_warhammer:23040,
+  steel_warhammer:384, black_warhammer:384, adamant_warhammer:2472, adamant_med_helm:1152,
+  steel_platebody:1200, mithril_platebody:3120, adamant_axe:768, adamant_sq_shield:2304,
+  rune_warhammer:24900,
   // black
-  black_sword:576, black_axe:576, black_kiteshield:576,
-  black_sq_shield:576, black_dagger:384,
+  black_sword:374, black_axe:230, black_kiteshield:979,
+  black_sq_shield:691, black_dagger:144,
   // iron
-  iron_full_helm:84, iron_kiteshield:60, iron_battleaxe:96, iron_dagger:30,
-  iron_sword:42, iron_longsword:60, iron_scimitar:60, iron_med_helm:72,
+  iron_full_helm:92, iron_kiteshield:142, iron_battleaxe:109, iron_dagger:21,
+  iron_sword:54, iron_longsword:84, iron_scimitar:67, iron_med_helm:50,
   // misc equipment
-  fire_battlestaff:9000, magic_staff:192, staff_of_earth:900,
-  plainstaff:48, druidrobetop:240, druidrobebottom:240,
-  mithril_bar:720,
+  fire_battlestaff:9300, magic_staff:120, staff_of_earth:900,
+  staff_of_water:900, staff_of_air:900, staff_of_fire:900,
+  plainstaff:9, druidrobetop:24, druidrobebottom:18,
+  mithril_bar:180,
   // ice giant / chaos dwarf / shadow warrior additions @274
-  mithril_longsword:780, iron_2h_sword:126, iron_platelegs:168, black_longsword:768,
+  mithril_longsword:780, iron_2h_sword:168, iron_platelegs:168, black_longsword:576,
 };
 
 // =====================================================================
@@ -209,22 +209,20 @@ const VALUE_THRESHOLD = 2000;
 // Non-members get coins×10; we assume members worlds.
 // 'loot' action: player identifies and sells each herb individually.
 //   Price = per-herb identified market price (scraped per species).
-// 'unid' action: sold as unidentified in stacks of 11.
-//   Price = unidentified_guam price per herb (site normalises per item).
 // 'value' action: only pick up herbs worth > VALUE_THRESHOLD each; cheap
 //   species (guam/marrentill/tarromin/…) roll but are left on the ground.
 const HERB_TABLE = [
-  { name:'Guam',       weight:32, price: P.herb_guam        ?? P.guam_leaf       ?? P.unidentified_guam ?? 15   },
-  { name:'Marrentill', weight:24, price: P.herb_marrentill  ?? P.marentill       ?? P.unidentified_guam ?? 12   },
-  { name:'Tarromin',   weight:18, price: P.herb_tarromin    ?? P.unidentified_guam ?? 25   },
-  { name:'Harralander',weight:14, price: P.herb_harralander ?? P.unidentified_guam ?? 45   },
-  { name:'Ranarr',     weight:11, price: P.herb_ranarr      ?? P.unidentified_guam ?? 5000 },
-  { name:'Irit',       weight:8,  price: P.herb_irit        ?? P.unidentified_guam ?? 80   },
-  { name:'Avantoe',    weight:6,  price: P.herb_avantoe     ?? P.unidentified_guam ?? 1500 },
-  { name:'Kwuarm',     weight:5,  price: P.herb_kwuarm      ?? P.unidentified_guam ?? 1200 },
-  { name:'Cadantine',  weight:4,  price: P.herb_cadantine   ?? P.unidentified_guam ?? 1500 },
-  { name:'Lantadyme',  weight:3,  price: P.herb_lantadyme   ?? P.unidentified_guam ?? 1800 },
-  { name:'Dwarf weed', weight:3,  price: P.herb_dwarf_weed  ?? P.unidentified_guam ?? 2000 },
+  { name:'Guam',       weight:32, price: P.herb_guam        ?? P.guam_leaf ?? 15   },
+  { name:'Marrentill', weight:24, price: P.herb_marrentill  ?? P.marentill ?? 12   },
+  { name:'Tarromin',   weight:18, price: P.herb_tarromin ?? 25   },
+  { name:'Harralander',weight:14, price: P.herb_harralander ?? 45   },
+  { name:'Ranarr',     weight:11, price: P.herb_ranarr ?? 5000 },
+  { name:'Irit',       weight:8,  price: P.herb_irit ?? 80   },
+  { name:'Avantoe',    weight:6,  price: P.herb_avantoe ?? 1500 },
+  { name:'Kwuarm',     weight:5,  price: P.herb_kwuarm ?? 1200 },
+  { name:'Cadantine',  weight:4,  price: P.herb_cadantine ?? 1500 },
+  { name:'Lantadyme',  weight:3,  price: P.herb_lantadyme ?? 1800 },
+  { name:'Dwarf weed', weight:3,  price: P.herb_dwarf_weed ?? 2000 },
 ];
 let HERB_EV = HERB_TABLE.reduce((s,h)=>s+h.weight*h.price,0) / 128;
 // High-value-only EV: cheap herbs contribute 0 (left on the ground), so the
@@ -1700,6 +1698,16 @@ const RUNE_ALCH_WEAPONS = new Set([
   'rune dagger','rune warhammer','rune mace','rune spear',
   'rune battleaxe','rune longsword','rune sword',
 ]);
+// Shop-stocked staves. They carry a market listing but nobody buys them in
+// bulk — the general store sells them endlessly, so the listing is a hope, not
+// a bid. scrape_prices.py already skips these (EXCLUDE_EXPLICIT); this is the
+// runtime half of the same rule.
+// NOTE: the elemental BATTLEstaves are deliberately absent — those trade
+// properly (~25k). This is only the basic shop-stocked staves.
+const UNSELLABLE_STAVES = new Set([
+  'magic staff','staff','plainstaff',
+  'staff of air','staff of water','staff of earth','staff of fire',
+]);
 const EQUIP_SUFFIXES = [
   'dagger','sword','longsword','scimitar','2h sword','battleaxe','axe','mace',
   'warhammer','hammer','spear','halberd','claws','hatchet','pickaxe',
@@ -1719,7 +1727,8 @@ function isTierEquipment(norm){
 // price, so the choice is alch (if profitable) or leave-on-ground.
 function isBulkUnsellable(name){
   const norm = normLoot(name);
-  return isTierEquipment(norm) || RUNE_ALCH_WEAPONS.has(norm);
+  return isTierEquipment(norm) || RUNE_ALCH_WEAPONS.has(norm)
+      || UNSELLABLE_STAVES.has(norm);
 }
 
 // Resolve the alch value for a drop by name (uses ALCH map keys).

@@ -1,0 +1,54 @@
+name: Update prices
+
+on:
+  schedule:
+    # 05:15 UTC daily — an hour after LC-bankvalue's own 04:15 refresh, so this
+    # picks up the commit it just pushed.
+    - cron: '15 5 * * *'
+  workflow_dispatch:
+
+# Only one price run at a time; a queued run would just fight over the data.
+concurrency:
+  group: update-prices
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # No dependencies to install — both scripts are stdlib only. Nothing here
+      # touches markets.lostcity.rs; LC-bankvalue already paid for that scrape.
+      - name: Sync market prices from LC-bankvalue
+        run: python sync_prices.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prices.json alch.json price-history.json
+          if git diff --staged --quiet; then
+            echo "No price changes to commit."
+          else
+            git commit -m "chore(data): refresh prices from LC-bankvalue [skip ci]"
+            git push
+          fi
+
+      # Alch values live in gamedata.js, which is SOURCE, not data — so this
+      # only reports drift, it never commits. Lost City's item costs change on
+      # content updates and nothing else (7 times in the upstream repo's whole
+      # history), so a red build here is rare and means: run `python
+      # sync_alch.py` locally, eyeball the diff, commit it yourself.
+      #
+      # Runs last on purpose: a failure here must not stop the price commit
+      # above from landing.
+      - name: Check alch values against Lost City item costs
+        run: python sync_alch.py --check
