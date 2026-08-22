@@ -1462,6 +1462,11 @@
   // (you roam between spawns) — forced to 4s here. Always editable per monster.
   const OVERHEAD_OVERRIDE = {
     blue_dragon: 4, green_dragon: 4, red_dragon: 4,
+    // Metal dragons: the heaviest pickup in the sim. Every kill drops bones
+    // plus FIVE unnoted bars, so that's 6–7 separate items off the ground
+    // before you even reach the random table — and they're size-4 npcs in a
+    // dungeon, so there's real walking between spawns too.
+    bronze_dragon: 6, iron_dragon: 6, steel_dragon: 6,
     // AFK / near-bones-only spots: almost no loot to grab, so overhead is tiny.
     pirate: 0.5, magicaxe: 0.5, ghoul: 0.5,
     // AFK-friendly, dense spawns — minimal walking/looting between kills.
