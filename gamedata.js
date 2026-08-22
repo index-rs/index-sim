@@ -1511,7 +1511,7 @@ const MONSTERS = [
   //   2. Dragon platelegs PRICE — a flagged 5m guess, never traded. See
   //      PLACEHOLDER_PRICES.
   //   3. Kill rate / bank time — Content@289 places no metal dragon spawns in
-  //      any map file, so the 6-minute bank preset in trip.js is an estimate.
+  //      any map file, so the bank preset in trip.js is an estimate.
 
   { id:'bronze_dragon', name:'Bronze dragon', level:131, hp:112, attack:112, strength:112, defLevel:112,
     dragonfire:true, dragonfireRanged:true, dragonfireMax:30, dragonfireRate:0.25, magicLevel:100,

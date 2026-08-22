@@ -29,11 +29,10 @@
   const BANK_PRESETS = {
     green_dragon:240, blue_dragon:270, red_dragon:300, black_dragon:300,
     // Metal dragons live in the Karamja/Brimhaven dungeon (their AI script sits
-    // under area_karamja @289) and Brimhaven has no bank — it's the boat back
-    // to Ardougne, so the round trip is long. No spawns exist in Content@289's
-    // maps yet, so this is a gameplay estimate, not a measured distance;
-    // override it in the Trip panel once the spawns land.
-    bronze_dragon:360, iron_dragon:360, steel_dragon:360,
+    // under area_karamja @289). No spawns exist in Content@289's maps yet, so
+    // this is a gameplay estimate rather than a measured distance — override it
+    // in the Trip panel once the spawns land.
+    bronze_dragon:210, iron_dragon:210, steel_dragon:210,
     ice_warrior:150, firegiant:210, giant:90, mossgiant:110, icegiant:120,
     hellhound:150, greater_demon:130, lesser_demon:120, black_demon:160,
     hobgoblin_armed:120, hobgoblin_unarmed:120, bandit:180, ankou:140,
@@ -58,6 +57,14 @@
     antifire:       { name:'Antifire potion', vials:1, priceKey:'antifire_potion', fallback:4200 },
     antipoison:     { name:'Super antipoison', vials:1, priceKey:'super_antipoison', fallback:760 },
   };
+
+  // Combat-rune slots locked for the whole trip. A standard spell cast off an
+  // elemental staff needs 2 (fire bolt = chaos + air, with fire free from the
+  // staff). The god spells need 3 — air + fire + blood, and a god staff
+  // autocasts nothing, so none of them is free. trip.runeSlots overrides.
+  function defaultRuneSlots(weaponKey){
+    return window.SimEngine?.WEAPONS?.[weaponKey]?.god ? 3 : 2;
+  }
 
   // Stackable loot occupies ONE slot per item type for the whole trip; a
   // non-stackable drop costs a slot per item. Runes, coins, and all thrown /
@@ -373,9 +380,14 @@
       reserve += 1; reserveParts.push('spec weapon');
     }
     if (restoreLocked){ reserve += 1; reserveParts.push('restore vial'); }
-    if (t.alching){ reserve += 2; reserveParts.push('alch runes'); }
+    if (t.alching){
+      // 1 nature + 5 fire runes = 2 slots, but a staff of fire supplies the
+      // fire runes so only the nature runes need carrying. See highAlchSlots().
+      const as = window.SimEngine?.highAlchSlots?.(input.weapon) ?? 2;
+      reserve += as; reserveParts.push(as === 1 ? 'nature runes' : 'alch runes');
+    }
     if (ctx.combatType === 'magic'){
-      const rs = t.runeSlots ?? 2;
+      const rs = t.runeSlots ?? defaultRuneSlots(input.weapon);
       reserve += rs; if (rs) reserveParts.push(`${rs} combat-rune`);
     }
     // Dwarf cannon: 4 parts + 1 (stackable) cannonball slot stay locked the
@@ -672,6 +684,6 @@
     };
   }
 
-  window.TripModel = { FOOD, POTIONS, BANK_PRESETS, bankSecondsFor, isStackable, computeIncoming, computeTrip };
+  window.TripModel = { FOOD, POTIONS, BANK_PRESETS, bankSecondsFor, defaultRuneSlots, isStackable, computeIncoming, computeTrip };
 
 })();

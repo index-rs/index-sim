@@ -334,7 +334,10 @@ function makeDefaults(combatType = 'melee', monsterId){
     trip: {
       bankSeconds: null,
       foodKey: 'lobster', foodCount: null,
-      potionSets: 1, potionDoses: 4, singleDose: false, dbaRestore: true, alching: false, runeSlots: 2,
+      // runeSlots null = auto (2 with an elemental staff, 3 with a god staff —
+      // see defaultRuneSlots in trip.js). Same null-means-auto convention as
+      // bankSeconds / foodCount above.
+      potionSets: 1, potionDoses: 4, singleDose: false, dbaRestore: true, alching: false, runeSlots: null,
       teleport: true, protect: 'none', safespot: null, recoverAmmo: true, antifire: false, antipoison: false,
       foodPerKillOverride: null, recoilRings: 1,
       // scarce-spot / AFK throttle: enabled=false ⇒ monsters never run out
@@ -1503,7 +1506,9 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
 
   const totalEvRaw  = result.lootBreakdown.reduce((s,d)=>s+d.evGp, 0) || 1;
   const dropsRaw     = [...result.lootBreakdown].sort((a,b)=>b.evGp-a.evGp);
-  const natCost      = window.GameData?.ITEM_PRICES?.naturerune ?? 265;
+  // Cost of one high-alch cast (nature + 5 fire, less whatever the staff
+  // supplies) — from the engine so the table can't drift from the sim.
+  const natCost      = E.highAlchCost(input.weapon);
 
   // 'value' pref (high-value-only): leave sub-table rolls worth <= threshold on
   // the ground. EVs come pre-filtered from GameData.
@@ -1549,7 +1554,7 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
   // Nature rune cost per cast — alching is only worth offering when the item's
   // alch value EXCEEDS it, otherwise the cast nets ≤ 0 gp (and wastes time). So
   // don't offer 'alch' on cheap drops (water runes, bass, ore, etc.).
-  const natRuneCost = window.GameData?.ITEM_PRICES?.naturerune ?? 347;
+  const natRuneCost = E.highAlchCost(input.weapon);
   // Bulk-unsellable gear (rune/tier weapons+armour) can't be sold, so the real
   // choice is alch-or-drop, not alch-vs-sell. Offer alch for those whenever the
   // alch value is non-trivial (>= floor), even if it's a few gp under a nature
@@ -2261,7 +2266,9 @@ function TripPane({input, result, setTrip, setCannon}){
             <Toggle label="DBA restore potion" subOn="1 slot — restores att/def" subOff="str boost only (no restore)" color="violet"
                     value={t.dbaRestore!==false} onChange={v=>setTrip({dbaRestore:v})} />
           )}
-          {ct==='magic' && <NumField label="Combat rune slots" min={0} v={t.runeSlots??2} onChange={v=>setTrip({runeSlots:Math.max(0,v)})} />}
+          {ct==='magic' && <NumField label="Combat rune slots" min={0}
+            v={t.runeSlots ?? (window.TripModel?.defaultRuneSlots?.(input.weapon) ?? 2)}
+            onChange={v=>setTrip({runeSlots:Math.max(0,v)})} />}
         </div>
       </div>
 
@@ -3443,6 +3450,13 @@ function loadSavedInput(){
     // model) so older saves don't load with empty/zeroed sections.
     const base = makeDefaults(saved.combatType || 'melee', monster.id);
     const trip = { ...base.trip, ...(saved.trip || {}) };
+    // runeSlots used to be seeded as a flat 2; it's now null = auto, derived
+    // per weapon (2 elemental / 3 god staff). A stored 2 would pin the old
+    // constant forever and hide the god-staff default. Converting it back to
+    // auto is behaviour-preserving everywhere it mattered: auto also yields 2
+    // for every non-god staff, so the only case that changes is the one this
+    // is meant to fix. An explicit 0/1/3+ is a real choice and is kept.
+    if (trip.runeSlots === 2) trip.runeSlots = null;
     return {...base, ...saved, trip, monster, _monsterId: undefined};
   } catch { return null; }
 }

@@ -129,6 +129,21 @@
     staff_of_air:     { name:'Staff of air',      type:'magic', provides:'airrune',   accBonus:10, dmgBonus:0, speed:5, alch:540 },
     staff_of_water:   { name:'Staff of water',    type:'magic', provides:'waterrune', accBonus:10, dmgBonus:0, speed:5, alch:540 },
     staff_of_earth:   { name:'Staff of earth',    type:'magic', provides:'earthrune', accBonus:10, dmgBonus:0, speed:5, alch:540 },
+    // magic — god staves (Mage Arena). EXACT from mage_arena.obj @289: all
+    // three are stat-identical (magicattack 6, cost 80000, untradeable).
+    // Two things differ from the elemental staves above:
+    //   * NO `provides` — a god staff autocasts nothing, so every rune in a
+    //     god spell is paid for. That's also why they want 3 rune slots
+    //     rather than 2 (air + fire + blood, none free) — see
+    //     defaultRuneSlots() in trip.js.
+    //   * accBonus 6, not 10 — the god staves are LESS accurate than a plain
+    //     elemental staff; you carry one to unlock the god spell, not for
+    //     the bonus.
+    // speed 5 is the CAST interval. The obj's attackrate=4 is the melee rate
+    // for bashing something with the staff, which isn't what this models.
+    staff_of_saradomin: { name:'Staff of Saradomin', type:'magic', god:true, accBonus:6, dmgBonus:0, speed:5, alch:48000 },
+    staff_of_guthix:    { name:'Staff of Guthix',    type:'magic', god:true, accBonus:6, dmgBonus:0, speed:5, alch:48000 },
+    staff_of_zamorak:   { name:'Staff of Zamorak',   type:'magic', god:true, accBonus:6, dmgBonus:0, speed:5, alch:48000 },
   };
 
   // WEAPON_STANCES — per weapon class, each stance maps to an attack TYPE
@@ -1075,7 +1090,9 @@
     // default) is meaningless: you have no runes, so you sell the item instead.
     const alchAllowed = !!(input.trip && input.trip.alching);
     const alchVals   = window.GameData?.ALCH_VALUES ?? {};
-    const natCost    = window.GameData?.ITEM_PRICES?.naturerune ?? 265;
+    // Cost of ONE high-alch cast: nature rune + 5 fire runes, minus whatever
+    // the equipped staff supplies. See highAlchCost().
+    const natCost    = highAlchCost(input.weapon);
     let gpPerKill = 0;
     let prayerXpPerKill = 0;
     let alchCastsPerKill = 0;
@@ -1526,6 +1543,32 @@
   };
   // Per-cast rune cost: sum of rune qty × live price, EXCLUDING the rune the
   // equipped staff provides for free (e.g. fire staff → fire runes free).
+  // ---- High Level Alchemy cast cost ----------------------------------
+  // One cast is 1 nature + 5 FIRE runes. The fire runes are free ONLY when the
+  // equipped weapon supplies them (staff of fire) — i.e. when you're training
+  // magic with one. Alching while meleeing or ranging means carrying fire
+  // runes and paying for them, and the model used to charge the nature rune
+  // alone, overstating every alch's profit by 5 fire runes.
+  // Same `provides` mechanism the spell cost above uses, so a fire staff is
+  // handled identically in both places.
+  const HIGH_ALCH_RUNES = { naturerune: 1, firerune: 5 };
+  function highAlchCost(weaponKey){
+    const P = window.GameData?.ITEM_PRICES || {};
+    const provided = WEAPONS[weaponKey]?.provides;
+    let gp = 0;
+    for (const [rune, qty] of Object.entries(HIGH_ALCH_RUNES)){
+      if (rune === provided) continue;
+      gp += (P[rune] ?? (rune === 'naturerune' ? 265 : 0)) * qty;
+    }
+    return gp;
+  }
+  // Inventory slots the alch runes lock for the trip: one per rune type you
+  // actually have to carry.
+  function highAlchSlots(weaponKey){
+    const provided = WEAPONS[weaponKey]?.provides;
+    return Object.keys(HIGH_ALCH_RUNES).filter(r => r !== provided).length;
+  }
+
   function spellRuneCost(spellKey, weaponKey){
     const sp = SPELLS[spellKey]; if (!sp || !sp.runes) return 0;
     const provided = WEAPONS[weaponKey]?.provides;
@@ -1561,6 +1604,7 @@
     effective, maxHitMelee, maxHitRanged, maxHitMagic, roll, hitChance, defaultOverhead,
     normalSustained, dbaSustainedAtt, dbaSustainedStr, dbaBoost,
     combinePrayers, combinePotionFn, resolveLoadout, spellRuneCost, chargeCostPerCast,
+    highAlchCost, highAlchSlots,
     simulate, availablePrayers, availablePotions,
   };
 })();
