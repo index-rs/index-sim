@@ -86,7 +86,7 @@ DEFAULT_ITEMS = [
     # gamedata.js); the first scraped price clears the flag automatically.
     # runite_bar was previously only a hard-coded fallback in the ultra-rare
     # table. NOT soulrune — fixed price in STATIC_PRICES (see EXCLUDE_EXPLICIT).
-    "dragon_platelegs", "runite_bar",
+    "dragon_platelegs", "runite_bar", "rune_axe",
 ]
 
 

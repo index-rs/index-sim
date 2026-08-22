@@ -1888,9 +1888,9 @@ const TIER_PREFIXES = ['bronze','iron','black','steel','mithril','adamant'];
 const RUNE_ALCH_WEAPONS = new Set([
   'rune dagger','rune warhammer','rune mace','rune spear',
   'rune battleaxe','rune longsword','rune sword',
-  // rune axe (steel dragon @289) — a woodcutting hatchet, alch-only like the
-  // rest of this list; nobody buys them in bulk.
-  'rune axe',
+  // NOTE: rune axe is deliberately NOT here. It's the woodcutting hatchet off
+  // the steel dragon table @289, and unlike the weapons above it does trade in
+  // bulk — it's scraped like any other sellable item.
 ]);
 // Shop-stocked staves. They carry a market listing but nobody buys them in
 // bulk — the general store sells them endlessly, so the listing is a hope, not

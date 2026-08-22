@@ -1446,7 +1446,13 @@
   };
   function bonePrayerXp(name){
     if (!name) return 0;
-    return PRAYER_XP_PER_BONE[String(name).toLowerCase()] || 0;
+    // Strip a "×N" quantity suffix before the lookup — a stacked bone drop
+    // ("Dragon bones ×2" off a steel dragon) is still a bone, and without this
+    // it silently fails the isBone test: no bury option in the UI and no
+    // prayer xp. Quantity is applied separately via drop.qtyAvg. Mirrors the
+    // same strip in GameData.normLoot.
+    const key = String(name).toLowerCase().replace(/\s*[×x]\s*\d+/g, '').trim();
+    return PRAYER_XP_PER_BONE[key] || 0;
   }
 
   // Default per-kill overhead (seconds spent looting/walking, not attacking).

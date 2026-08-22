@@ -122,9 +122,8 @@ EQUIP_SUFFIXES = (
 RUNE_ALCH = {
     "rune_dagger", "rune_warhammer", "rune_mace", "rune_spear",
     "rune_battleaxe", "rune_longsword", "rune_sword",
-    # rune_axe — the woodcutting hatchet off the steel dragon table @289.
-    # Alch-only like the rest; nobody buys them in bulk.
-    "rune_axe",
+    # NOTE: rune_axe is deliberately absent — the woodcutting hatchet does
+    # trade in bulk, so it's scraped like any other sellable item.
 }
 # Shop-stocked staves — the general store sells them endlessly, so a listing is
 # a hope, not a bid. Mirrors UNSELLABLE_STAVES in gamedata.js.
