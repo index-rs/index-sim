@@ -1504,8 +1504,14 @@ const MONSTERS = [
   // and prot-magic does not apply. Modelled via dragonfireMax/dragonfireRate
   // in trip.js; see computeIncoming there.
   //
-  // No spawns exist in Content@289's maps yet and dragon platelegs have no
-  // market history, so kill-rate and platelegs value are the soft numbers here.
+  // THINGS TO RE-CHECK WHEN 289 ACTUALLY GOES LIVE — everything above is read
+  // straight out of the configs, but these three are not settled:
+  //   1. Steel dragon's dragon platelegs rate. Upstream says 1/512; modelled
+  //      here at 1/256 as a deliberate deviation (see the note at that drop).
+  //   2. Dragon platelegs PRICE — a flagged 5m guess, never traded. See
+  //      PLACEHOLDER_PRICES.
+  //   3. Kill rate / bank time — Content@289 places no metal dragon spawns in
+  //      any map file, so the 6-minute bank preset in trip.js is an estimate.
 
   { id:'bronze_dragon', name:'Bronze dragon', level:131, hp:112, attack:112, strength:112, defLevel:112,
     dragonfire:true, dragonfireRanged:true, dragonfireMax:30, dragonfireRate:0.25, magicLevel:100,
@@ -1559,7 +1565,16 @@ const MONSTERS = [
       // death_drop (dragon_bones) AND an explicit second dragon_bones in
       // steel_dragon.rs2 — steel dragons really do drop two sets.
       always('Dragon bones ×2',2,'dragon_bones'), always('Steel bar ×5',5,'steel_bar'),
-      d('Dragon platelegs',1,1,'dragon_platelegs',512),   // random(512) = 0
+      // *** DELIBERATE DEVIATION FROM Content@289 — RE-CHECK WHEN 289 GOES LIVE ***
+      // steel_dragon.rs2 @289 says random(512), the SAME rate it gives the iron
+      // dragon. That looks like a transcription slip, not a design choice: the
+      // tertiary doubles every tier (bronze 1/1024 → iron 1/512 → steel 1/256),
+      // bronze and iron both match the live game, and only steel breaks the
+      // pattern. Modelled at 1/256 on the assumption it gets fixed before
+      // release. If 289 ships with 512 after all, change this back — at 5m a
+      // pair this row is a big slice of the steel dragon's gp/kill, so the
+      // difference is not cosmetic.
+      d('Dragon platelegs',1,1,'dragon_platelegs',256),   // upstream: random(512)
       d('Rune dart(p) ×12',7,12,'rune_dart'), d('Rune mace',4,1,'rune_mace'),
       d('Adamant kiteshield',2,1,'adamant_kiteshield'), d('Rune knife ×7',3,7,'rune_knife'),
       d('Rune axe',2,1,'rune_axe'), d('Rune full helm',1,1,'rune_full_helm'),
