@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8765"],
       "port": 8765
+    },
+    {
+      "name": "index-sim",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["hiscores_proxy.py", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

@@ -497,7 +497,12 @@ function Chrome({ crumbs, status='live', extras=[] }){
 }
 
 // Hiscores lookup — fetches player stats from the local server proxy.
-// Only works when running via run_sim.py (http://localhost:8000).
+//
+// This cannot talk to 2004.lostcity.rs directly. That API answers with a fixed
+// `access-control-allow-origin: https://2004.lostcity.rs`, which never echoes
+// the caller, so the browser blocks the response before we see it. The proxy in
+// hiscores_proxy.py is what makes the lookup possible; everything else in the
+// app works without it.
 function HiscoresLookup({ set }) {
   const isLocal = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -508,7 +513,7 @@ function HiscoresLookup({ set }) {
   if (!isLocal) return (
     <div style={{padding:'7px 12px', borderBottom:'1px solid var(--border-1)',
       fontFamily:'var(--mono)', fontSize:10, color:'var(--text-4)', lineHeight:1.5}}>
-      hiscores lookup — run via <span style={{color:'var(--text-3)'}}>python run_sim.py</span> to enable
+      hiscores lookup — run via <span style={{color:'var(--text-3)'}}>python hiscores_proxy.py</span> to enable
     </div>
   );
 
@@ -523,12 +528,12 @@ function HiscoresLookup({ set }) {
       // a clear message instead of a bare JSON.parse exception.
       const text = await res.text();
       if (!text.trim()) {
-        setStatus({ ok: false, msg: 'server returned empty response — check run_sim.py console' });
+        setStatus({ ok: false, msg: 'server returned empty response — check the proxy console' });
         setLoading(false); return;
       }
       let data;
       try { data = JSON.parse(text); }
-      catch { setStatus({ ok: false, msg: 'server returned non-JSON — is run_sim.py up to date?' }); setLoading(false); return; }
+      catch { setStatus({ ok: false, msg: 'server returned non-JSON — is hiscores_proxy.py serving this page?' }); setLoading(false); return; }
       if (!res.ok || data.error) {
         setStatus({ ok: false, msg: data.error || `HTTP ${res.status}` });
       } else {
@@ -543,12 +548,16 @@ function HiscoresLookup({ set }) {
         if (s.magic)     set('magic',     clamp(s.magic));
         const filled = ['attack','strength','defence','hitpoints','prayer','ranged','magic']
           .filter(k => s[k]).length;
-        setStatus({ ok: true, msg: `✓ ${data.player} — ${filled} stats loaded` });
+        // A skill the player is not ranked in never comes back. Say which ones
+        // kept their old value rather than implying all seven were loaded.
+        const missing = Array.isArray(data.missing) ? data.missing : [];
+        setStatus({ ok: true, msg: `✓ ${data.player} — ${filled} stats loaded` +
+          (missing.length ? ` (unranked: ${missing.join(', ')})` : '') });
       }
     } catch (e) {
       const msg = (e.message||'').toLowerCase();
       if (msg.includes('fetch') || msg.includes('networkerror') || msg.includes('failed')) {
-        setStatus({ ok: false, msg: 'server not reachable — run via run_sim.py' });
+        setStatus({ ok: false, msg: 'server not reachable — run via hiscores_proxy.py' });
       } else {
         setStatus({ ok: false, msg: e.message || 'unknown error' });
       }

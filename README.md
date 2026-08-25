@@ -44,3 +44,15 @@ node tools/run-golden.js
 
 Exit code is 1 on any mismatch. When a change is deliberate, re-record with
 `--update`. See [docs/golden-tests.md](docs/golden-tests.md).
+
+## Running it locally
+
+Open `index.html` directly and everything works except the RSN hiscores box,
+which needs a server because the hiscores API refuses cross-origin reads:
+
+```bash
+python hiscores_proxy.py
+```
+
+That serves the app on http://localhost:8000/ and proxies the lookups. Stdlib
+only, no build step. See [docs/hiscores.md](docs/hiscores.md).
