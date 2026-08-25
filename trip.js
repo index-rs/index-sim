@@ -96,21 +96,33 @@
   function computeIncoming(input, ctx){
     const m = ctx.m;
     const atkType = m.atkType || 'melee';
+    // A monster that fires rather than swings rolls off an entirely different
+    // pair of stats. npc_combat_ranged.rs2 @274:
+    //   attack_roll = (ranged + 9) × (rangeattack + 64)
+    //   maxhit      = ((ranged + 9) × (rangebonus + 64) + 320) / 640
+    // Note the ranged level drives BOTH, where melee splits accuracy (attack)
+    // from damage (strength). Elf warrior (90) is the case that matters: it has
+    // ranged 80 against attack 10, so reading its accuracy off `attack` had it
+    // rolling at a fifth of its real strength, which understated everything
+    // downstream — incoming damage, food per kill, and now the risk spread.
+    const usesRanged = m.rangeLevel != null;
+
     const mStr = m.strength ?? m.attack ?? 1;
     // Monster max hit. The strength->maxhit formula below assumes a ZERO strength
     // bonus, so it under-hits monsters that have a strength bonus (giants, etc.):
     // e.g. fire giant computes 7 but really maxes 11. When the real value is known
     // (from the fansite NPC DB / OSRS), set m.maxHit on the monster to override.
-    const monMax = m.maxHit ?? Math.floor(((mStr + 9) * ((m.strBonus ?? 0) + 64) + 320) / 640);
+    const monMax = m.maxHit ?? (usesRanged
+      ? Math.floor(((m.rangeLevel + 9) * ((m.rangeBonus ?? 0) + 64) + 320) / 640)
+      : Math.floor(((mStr + 9) * ((m.strBonus ?? 0) + 64) + 320) / 640));
     // ^ combat_maxhit @274 (npc_combat_melee.rs2): effective_strength = strength + 9
     //   (no prayer, +8 base +1 'style'); maxhit = (eff_str × (strengthbonus+64) + 320)/640.
     //   strBonus defaults 0 when unknown (under-hits monsters with a str bonus).
     //   m.maxHit stays as an explicit override for non-formula cases (e.g. the
     //   ranged dagannoth's fixed spine max hit).
-    const mAttBonus = m.attBonus ?? 0;
-    // NPC attack roll @274 (npc_combat_melee.rs2): effective_attack = attack + 9;
-    //   attack_roll = effective_attack × (attackbonus + 64). attBonus defaults 0.
-    const monAttRoll = ((m.attack ?? 1) + 9) * (mAttBonus + 64);
+    const monAttRoll = usesRanged
+      ? ((m.rangeLevel + 9) * ((m.rangeAttBonus ?? 0) + 64))
+      : (((m.attack ?? 1) + 9) * ((m.attBonus ?? 0) + 64));
 
     // Safespotting: ranged, magic, and halberds attack from behind an
     // obstacle, so the monster never gets a hit in (and 2004 dragonfire is
@@ -130,7 +142,27 @@
     const totals = (EQ && input.gear)
       ? EQ.sumBonuses({ ...input.gear, weapon: input.weapon, ammo: input.ammo })
       : {};
-    const defKey = atkType === 'magic' ? 'magDef' : atkType === 'ranged' ? 'rngDef' : 'slashDef';
+    // Which of the player's defence bonuses the monster's roll is checked
+    // against. Source takes this from `param=damagetype` on the NPC, not from
+    // how the attack looks:
+    //   npc_meleeattack / npc_rangeattack both call
+    //   ~player_defence_roll_specific(npc_param(damagetype))
+    // so a bow-armed elf whose damagetype is ^stab_style is checked against
+    // STAB defence, and Protect from Missiles still blocks it. The two are
+    // independent, which is why m.damageType and m.atkType are separate fields.
+    //
+    // Across the monsters here that is 24 slash, 21 crush and 18 stab. This
+    // used to assume slash for every one of them, so 39 of 63 were reading the
+    // wrong bonus off the player's gear — and in rune, stab/slash/crush defence
+    // differ enough to move food per kill. m.damageType is verified against
+    // source by tools/audit-npcstats.js; the three metal dragons have no config
+    // to verify against and fall back to the old slash assumption.
+    const defKey = atkType === 'magic' ? 'magDef'
+      : m.damageType === 'stab'  ? 'stabDef'
+      : m.damageType === 'crush' ? 'crushDef'
+      : m.damageType === 'slash' ? 'slashDef'
+      : m.damageType === 'ranged' ? 'rngDef'
+      : atkType === 'ranged' ? 'rngDef' : 'slashDef';
     const pDefBonus = totals[defKey] || 0;
     const defLvl = input.defence || 1;
     const prayerDefMult = ctx.prayerDef || 1;
@@ -216,8 +248,12 @@
     // re-engage) you heal some of the damage back — on slow, low-damage
     // targets (e.g. chaos druids) regen out-paces incoming, so net food = 0.
     const netHpPerKill = Math.max(0, hpPerKill - regenPerKill);
+    // `attacks` and `meleeShare` are the two terms hpPerKill is built from.
+    // risk.js re-rolls that product per kill instead of taking its mean, so it
+    // needs the pieces, not just the answer. Nothing else reads them.
     return { hpPerKill, netHpPerKill, regenPerKill, monMax,
              hitChance: safespot ? 0 : hc,
+             attacks, meleeShare,
              dragonfire, poison, protected: isProt, safespot, safespotAuto };
   }
 

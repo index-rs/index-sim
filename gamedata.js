@@ -519,6 +519,14 @@ function d(name, weight, qty, itemId, total=128){
   const id = itemId ?? name.toLowerCase().replace(/[\s×\d]+$/,'').replace(/\s/g,'_').replace(/[^a-z0-9_]/g,'');
   return { name, key:id, chance:w(weight,total), qtyAvg:qty, price:gp(id), alchValue:ALCH[id]??0 };
 }
+// Some Content drops have no market or alch entry in this repo, so they are
+// valued through a stand-in item. dProxy keeps that substitution explicit:
+// `key` is what we price against, `src` is what actually drops. Without this
+// the row silently reports another item's price and tools/audit-droptables.js
+// cannot tell a proxy apart from a mistake.
+function dProxy(name, weight, qty, priceId, srcId, total=128){
+  return { ...d(name, weight, qty, priceId, total), src:srcId };
+}
 function coins(weight, qty, total=128){ return { name:'Coins', key:'coins', chance:w(weight,total), qtyAvg:qty, price:1, alchValue:0 }; }
 function always(name, qty, itemId){
   const id = itemId ?? name.toLowerCase().replace(/\s/g,'_');
@@ -588,18 +596,18 @@ const MONSTERS = [
   // TIER 1 — LOW LEVEL
   // =====================================================================
 
-  { id:'chicken', name:'Chicken', level:1, hp:3, attack:1, strength:1, defLevel:1, defStab:-42, defSlash:-42, defCrush:-42, defRange:-42, defMagic:-42, attBonus:-47, strBonus:-42, attackSpeed:4,
+  { id:'chicken', name:'Chicken', level:1, hp:3, attack:1, strength:1, defLevel:1, defStab:-42, defSlash:-42, defCrush:-42, defRange:-42, defMagic:-42, attBonus:-47, strBonus:-42, attackSpeed:4, damageType:'stab',
     // chicken.rs2 @274: death_drop=bones (always) + raw_chicken (always). Feathers
     // are an "Other" roll on random(128): <32 → 15 feathers, <64 → 5 feathers,
     // else nothing (so feathers drop only half the time).
     loot:[ always('Bones',1,'bones'), always('Raw chicken',1,'raw_chicken'),
       d('Feathers ×15',32,15,'feather'), d('Feathers ×5',32,5,'feather') ] },
 
-  { id:'cow', name:'Cow', level:2, hp:8, attack:1, strength:1, defLevel:1, defStab:-21, defSlash:-21, defCrush:-21, defRange:-21, defMagic:-21, attBonus:-15, strBonus:-15, attackSpeed:4,
+  { id:'cow', name:'Cow', level:2, hp:8, attack:1, strength:1, defLevel:1, defStab:-21, defSlash:-21, defCrush:-21, defRange:-21, defMagic:-21, attBonus:-15, strBonus:-15, attackSpeed:4, damageType:'crush',
     loot:[ always('Bones',1,'bones'), always('Cowhide',1,'cow_hide'), always('Raw beef',1,'raw_beef') ] },
 
 
-  { id:'goblin', name:'Goblin', level:2, hp:5, attack:1, strength:1, defLevel:1, defStab:-15, defSlash:-15, defCrush:-15, defRange:-15, defMagic:-15, attBonus:-21, strBonus:-15, attackSpeed:4,
+  { id:'goblin', name:'Goblin', level:2, hp:5, attack:1, strength:1, defLevel:1, defStab:-15, defSlash:-15, defCrush:-15, defRange:-15, defMagic:-15, attBonus:-21, strBonus:-15, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       coins(1,1), coins(2,20), coins(3,15), coins(3,9),
@@ -617,11 +625,11 @@ const MONSTERS = [
       d('Beer',2,1,'beer'),
     ] },
 
-  { id:'man', name:'Man', level:2, hp:7, attack:1, strength:1, defLevel:1, defStab:-21, defSlash:-21, defCrush:-21, defRange:-21, defMagic:-21, attackSpeed:4,
+  { id:'man', name:'Man', level:2, hp:7, attack:1, strength:1, defLevel:1, defStab:-21, defSlash:-21, defCrush:-21, defRange:-21, defMagic:-21, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Iron dagger',1,1,'iron_dagger'),
-      d('Bronze med helm',2,1,'iron_full_helm'),
+      dProxy('Bronze med helm',2,1,'iron_full_helm','bronze_med_helm'),
       d('Bolts ×7',22,7,'bolt'),
       d('Bronze arrow ×7',3,7,'bronze_arrow'),
       d('Earth rune ×4',2,4,'earthrune'),
@@ -638,11 +646,11 @@ const MONSTERS = [
 
   // NPC config @274: areas/area_alkharid/configs/alkharid.npc (verified exact).
   // Drop table: shares man_drop_table (scripts/drop tables/scripts/man.rs2).
-  { id:'al_kharid_warrior', name:'Al-Kharid warrior', level:9, hp:19, attack:7, strength:5, defLevel:4, attBonus:10, strBonus:9, defStab:12, defSlash:15, defCrush:10, defRange:12, defMagic:-1, attackSpeed:4,
+  { id:'al_kharid_warrior', name:'Al-Kharid warrior', level:9, hp:19, attack:7, strength:5, defLevel:4, attBonus:10, strBonus:9, defStab:12, defSlash:15, defCrush:10, defRange:12, defMagic:-1, attackSpeed:4, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Iron dagger',1,1,'iron_dagger'),
-      d('Bronze med helm',2,1,'iron_full_helm'),
+      dProxy('Bronze med helm',2,1,'iron_full_helm','bronze_med_helm'),
       d('Bolts ×7',22,7,'bolt'),
       d('Bronze arrow ×7',3,7,'bronze_arrow'),
       d('Earth rune ×4',2,4,'earthrune'),
@@ -657,10 +665,10 @@ const MONSTERS = [
       d('Cabbage',1,1,'cabbage'),
     ] },
 
-  { id:'farmer', name:'Farmer', level:7, hp:12, attack:3, strength:4, defLevel:8, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:5, strBonus:6, attackSpeed:4,
+  { id:'farmer', name:'Farmer', level:7, hp:12, attack:3, strength:4, defLevel:8, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:5, strBonus:6, attackSpeed:6, damageType:'stab',
     loot:[
       always('Bones',1,'bones'),
-      d('Bronze med helm',2,1,'iron_full_helm'),
+      dProxy('Bronze med helm',2,1,'iron_full_helm','bronze_med_helm'),
       d('Iron dagger',1,1,'iron_dagger'),
       d('Bronze arrow ×7',3,7,'bronze_arrow'),
       d('Earth rune ×4',2,4,'earthrune'),
@@ -675,7 +683,7 @@ const MONSTERS = [
       d('Cabbage',1,1,'cabbage'),
     ] },
 
-  { id:'barbarian', name:'Barbarian', level:7, hp:14, attack:6, strength:6, defLevel:2, defStab:12, defSlash:15, defCrush:13, defRange:6, defMagic:3, attBonus:8, strBonus:7, attackSpeed:4,
+  { id:'barbarian', name:'Barbarian', level:7, hp:14, attack:6, strength:6, defLevel:2, defStab:12, defSlash:15, defCrush:13, defRange:6, defMagic:3, attBonus:8, strBonus:7, attackSpeed:5, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Bronze axe',6,1,'bronze_axe'),
@@ -692,12 +700,12 @@ const MONSTERS = [
       d('Cooked meat',1,1,'cooked_meat'), d('Flier',1,1,'flier'), d('Ring mould',1,1,'ring_mould'),
     ] },
 
-  { id:'dark_wizard', name:'Dark Wizard (lvl 7)', level:7, hp:12, attack:5, strength:2, defLevel:5, magicLevel:6, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
+  { id:'dark_wizard', name:'Dark Wizard (lvl 7)', level:7, hp:12, attack:5, strength:2, defLevel:5, magicLevel:6, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Staff',8,1,'plainstaff'),
-      d('Black wizard hat',4,1,'chefs_hat'),
-      d('Black robe',3,1,'goblin_armour'),
+      dProxy('Black wizard hat',4,1,'chefs_hat','blackwizhat'),
+      dProxy('Black robe',3,1,'goblin_armour','black_robe'),
       d('Earth rune ×36',4,36,'earthrune'), d('Air rune ×10',3,10,'airrune'), d('Water rune ×10',3,10,'waterrune'),
       d('Earth rune ×10',3,10,'earthrune'), d('Fire rune ×10',3,10,'firerune'),
       d('Air rune ×18',2,18,'airrune'), d('Water rune ×18',2,18,'waterrune'),
@@ -711,10 +719,10 @@ const MONSTERS = [
       d('Water talisman',1,1,'water_talisman'), d('Fire talisman',1,1,'fire_talisman'),
     ] },
 
-  { id:'dark_wizard_20', name:'Dark Wizard (lvl 20)', level:20, hp:24, attack:17, strength:17, defLevel:14, magicLevel:22, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
+  { id:'dark_wizard_20', name:'Dark Wizard (lvl 20)', level:20, hp:24, attack:17, strength:17, defLevel:14, magicLevel:22, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
-      d('Black wizard hat',4,1,'chefs_hat'), d('Staff',4,1,'plainstaff'), d('Black robe',3,1,'goblin_armour'),
+      dProxy('Black wizard hat',4,1,'chefs_hat','blackwizhat'), d('Staff',4,1,'plainstaff'), dProxy('Black robe',3,1,'goblin_armour','black_robe'),
       d('Earth rune ×36',4,36,'earthrune'), d('Air rune ×10',3,10,'airrune'), d('Water rune ×10',3,10,'waterrune'),
       d('Earth rune ×10',3,10,'earthrune'), d('Fire rune ×10',3,10,'firerune'),
       d('Air rune ×18',2,18,'airrune'), d('Water rune ×18',2,18,'waterrune'),
@@ -728,10 +736,10 @@ const MONSTERS = [
       d('Water talisman',2,1,'water_talisman'), d('Fire talisman',2,1,'fire_talisman'),
     ] },
 
-  { id:'wizard', name:'Wizard', level:9, hp:14, attack:8, strength:8, defLevel:5, magicLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4,
+  { id:'wizard', name:'Wizard', level:9, hp:14, attack:8, strength:8, defLevel:5, magicLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:3, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
-      d('Staff',8,1,'plainstaff'), d('Wizard robe',7,1,'goblin_armour'), d('Blue wizard hat',3,1,'chefs_hat'),
+      d('Staff',8,1,'plainstaff'), dProxy('Wizard robe',7,1,'goblin_armour','wizards_robe'), dProxy('Blue wizard hat',3,1,'chefs_hat','bluewizhat'),
       d('Chaos rune ×2',8,2,'chaosrune'), d('Nature rune ×2',8,2,'naturerune'),
       d('Air rune ×5',3,5,'airrune'), d('Body rune ×5',3,5,'bodyrune'), d('Earth rune ×5',3,5,'earthrune'),
       d('Fire rune ×5',3,5,'firerune'), d('Mind rune ×5',3,5,'mindrune'), d('Water rune ×5',3,5,'waterrune'),
@@ -744,18 +752,18 @@ const MONSTERS = [
       coins(23,1), coins(9,2), coins(7,18), coins(1,30),
     ] },
 
-  { id:'highwayman', name:'Highwayman', level:5, hp:13, attack:2, strength:2, defLevel:2, defStab:0, defSlash:3, defCrush:2, defRange:2, defMagic:0, attBonus:6, strBonus:7, attackSpeed:4,
+  { id:'highwayman', name:'Highwayman', level:5, hp:13, attack:2, strength:2, defLevel:2, defStab:0, defSlash:3, defCrush:2, defRange:2, defMagic:0, attBonus:6, strBonus:7, attackSpeed:4, damageType:'stab',
     loot:[ always('Bones',1,'bones'), always('Black cape',1,'black_cape') ] },
 
 
-  { id:'bear', name:'Bear', level:19, hp:25, attack:15, strength:16, defLevel:13, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'bear', name:'Bear', level:19, hp:25, attack:15, strength:16, defLevel:13, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'slash',
     loot:[ always('Bones',1,'bones'), always('Fur',1,'fur'), always('Raw bear meat',1,'raw_bear_meat') ] },
 
   // =====================================================================
   // TIER 2 — MID LOW
   // =====================================================================
 
-  { id:'guard', name:'Guard', level:21, hp:22, attack:19, strength:18, defLevel:14, defStab:18, defSlash:25, defCrush:19, defRange:20, defMagic:-4, attBonus:4, strBonus:5, attackSpeed:4,
+  { id:'guard', name:'Guard', level:21, hp:22, attack:19, strength:18, defLevel:14, defStab:18, defSlash:25, defCrush:19, defRange:20, defMagic:-4, attBonus:4, strBonus:5, attackSpeed:4, damageType:'stab',
     loot:[
       always('Bones',1,'bones'),
       d('Iron dagger',6,1,'iron_dagger'),
@@ -773,54 +781,54 @@ const MONSTERS = [
   // (random(138), death_drop = bones guaranteed; medium-clue tertiary omitted).
   // Combat stats are OSRS-based 2004 approximations: level 32, 30 HP. Magic 1.
   // Chances use the /138 denominator (w(weight,138)).
-  { id:'tribesman', name:'Tribesman', level:32, hp:30, attack:28, strength:28, defLevel:24, magicLevel:1,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:8, strBonus:5, attackSpeed:4,
+  { id:'tribesman', name:'Tribesman', level:32, hp:39, attack:23, strength:27, defLevel:26, magicLevel:1,
+    defStab:4, defSlash:6, defCrush:6, defRange:0, defMagic:0, attBonus:8, strBonus:5, attackSpeed:4, damageType:'stab',
     poisons:true, poisonMax:5, antipoisonFromDrops:true,
     loot:[
       always('Bones',1,'bones'),
-      d('Bronze spear',7,1,'bronze_spear'),
+      d('Bronze spear',7,1,'bronze_spear',138),
       { name:'Steel javelin ×10', key:'steel_javelin', chance:w(3,138), qtyAvg:10, price:gp('steel_javelin'), alchValue:ALCH['steel_javelin']??0 },
-      { name:'Poison bolts ×4', key:'bolt', chance:w(2,138), qtyAvg:4, price:gp('bolt'), alchValue:0 },
-      d('Iron spear',2,1,'iron_spear'),
-      { name:'Steel arrow(p) ×5', key:'steel_arrow', chance:w(2,138), qtyAvg:5, price:gp('steel_arrow'), alchValue:ALCH['steel_arrow']??0 },
+      { name:'Poison bolts ×4', key:'bolt', src:'poison_bolt', chance:w(2,138), qtyAvg:4, price:gp('bolt'), alchValue:0 },
+      d('Iron spear',2,1,'iron_spear',138),
+      { name:'Steel arrow(p) ×5', key:'steel_arrow', src:'steel_arrow_p', chance:w(2,138), qtyAvg:5, price:gp('steel_arrow'), alchValue:ALCH['steel_arrow']??0 },
       { name:'Mithril javelin ×10', key:'mithril_javelin', chance:w(2,138), qtyAvg:10, price:gp('mithril_javelin'), alchValue:0 },
-      d('Mithril spear',1,1,'mithril_spear'),
-      d('Unid. rogues purse',5,1,'unidentified_rogues_purse'),
-      d('Unid. snake weed',5,1,'unidentified_snake_weed'),
+      d('Mithril spear',1,1,'mithril_spear',138),
+      d('Unid. rogues purse',5,1,'unidentified_rogues_purse',138),
+      d('Unid. snake weed',5,1,'unidentified_snake_weed',138),
       { ...herbDrop(w(11,138)) },
-      coins(25,15), coins(5,62),
-      d('Snape grass',20,1,'snape_grass'),
-      d('Limpwurt root',12,1,'limpwurt_root'),
-      d('Cleaning cloth',12,1,'tbwt_cleaning_cloth'),
-      d('Nature rune ×3',8,3,'naturerune'),
-      d('Gold ore',5,1,'gold_ore'),
-      d('Antipoison (2)',3,1,'antipoison2'),
-      d('Antipoison (3)',1,1,'antipoison3'),
-      d('Bread',1,1,'bread'),
-      d('Tin ore',1,1,'tin_ore'),
-      d('Pot of flour',1,1,'pot_flour'),
+      coins(25,15,138), coins(5,62,138),
+      d('Snape grass',20,1,'snape_grass',138),
+      d('Limpwurt root',12,1,'limpwurt_root',138),
+      d('Cleaning cloth',12,1,'tbwt_cleaning_cloth',138),
+      d('Nature rune ×3',8,3,'naturerune',138),
+      d('Gold ore',5,1,'gold_ore',138),
+      dProxy('Antipoison (2)',3,1,'antipoison2','2dose2antipoison',138),
+      dProxy('Antipoison (3)',1,1,'antipoison3','3dose2antipoison',138),
+      d('Bread',1,1,'bread',138),
+      d('Tin ore',1,1,'tin_ore',138),
+      d('Pot of flour',1,1,'pot_flour',138),
       gemDrop(w(2,138)),
     ] },
 
-  { id:'dwarf', name:'Dwarf', level:10, hp:16, attack:8, strength:8, defLevel:6, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:5, attBonus:5, strBonus:7, attackSpeed:4,
+  { id:'dwarf', name:'Dwarf', level:10, hp:16, attack:8, strength:8, defLevel:6, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:5, attBonus:5, strBonus:7, attackSpeed:5, damageType:'stab',
     loot:[
       always('Bones',1,'bones'),
-      d('Bronze pickaxe',13,1,'bronze_pickaxe'), d('Bronze med helm',4,1,'iron_full_helm'),
-      d('Bronze battleaxe',2,1,'bronze_axe'), d('Iron battleaxe',1,1,'iron_battleaxe'),
+      d('Bronze pickaxe',13,1,'bronze_pickaxe'), dProxy('Bronze med helm',4,1,'iron_full_helm','bronze_med_helm'),
+      dProxy('Bronze battleaxe',2,1,'bronze_axe','bronze_battleaxe'), d('Iron battleaxe',1,1,'iron_battleaxe'),
       d('Bolts ×7',7,7,'bolt'),
       d('Chaos rune ×2',4,2,'chaosrune'), d('Nature rune ×2',4,2,'naturerune'),
       coins(20,4), coins(15,10), coins(2,30),
-      d('Hammer',10,1,'bronze_axe'), d('Bronze bar',7,1,'bronze_bar'),
+      dProxy('Hammer',10,1,'bronze_axe','hammer'), d('Bronze bar',7,1,'bronze_bar'),
       d('Iron ore',4,1,'iron_ore'), d('Tin ore',3,1,'tin_ore'), d('Copper ore',3,1,'copper_ore'),
       d('Iron bar',3,1,'iron_bar'), d('Coal',2,1,'coal'),
       gemDrop(w(1)),
     ] },
 
-  { id:'dark_warrior', name:'Dark Warrior', level:8, hp:17, attack:5, strength:5, defLevel:5, defStab:96, defSlash:79, defCrush:59, defRange:0, defMagic:0, attBonus:20, strBonus:16, attackSpeed:4,
+  { id:'dark_warrior', name:'Dark Warrior', level:8, hp:17, attack:5, strength:5, defLevel:5, defStab:96, defSlash:79, defCrush:59, defRange:0, defMagic:0, attBonus:20, strBonus:16, attackSpeed:4, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
-      d('Bronze med helm',3,1,'iron_full_helm'), d('Iron mace',1,1,'iron_mace'),
-      d('Black med helm',1,1,'iron_full_helm'), d('Black mace',1,1,'iron_mace'),
+      dProxy('Bronze med helm',3,1,'iron_full_helm','bronze_med_helm'), d('Iron mace',1,1,'iron_mace'),
+      dProxy('Black med helm',1,1,'iron_full_helm','black_med_helm'), dProxy('Black mace',1,1,'iron_mace','black_mace'),
       d('Mind rune ×2',3,2,'mindrune'), d('Water rune ×3',2,3,'waterrune'), d('Earth rune ×2',1,2,'earthrune'),
       d('Bronze arrow ×8',4,8,'bronze_arrow'), d('Chaos rune ×2',1,2,'chaosrune'), d('Nature rune ×3',2,3,'naturerune'),
       herbDrop(w(3)),
@@ -828,7 +836,7 @@ const MONSTERS = [
       d('Iron ore',1,1,'iron_ore'), d('Sardine',1,1,'sardine'),
     ] },
 
-  { id:'pirate', name:'Pirate', level:23, hp:20, attack:20, strength:20, defLevel:20, defStab:0, defSlash:1, defCrush:0, defRange:0, defMagic:0, attBonus:10, strBonus:9, attackSpeed:4,
+  { id:'pirate', name:'Pirate', level:23, hp:20, attack:20, strength:20, defLevel:20, defStab:0, defSlash:1, defCrush:0, defRange:0, defMagic:0, attBonus:10, strBonus:9, attackSpeed:4, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Iron dagger',6,1,'iron_dagger'), d('Bronze scimitar',4,1,'bronze_scimitar'),
@@ -842,10 +850,10 @@ const MONSTERS = [
       d('Iron bar',1,1,'iron_bar'), gemDrop(1/128),
     ] },
 
-  { id:'thug', name:'Thug', level:10, hp:18, attack:7, strength:5, defLevel:9, defStab:2, defSlash:3, defCrush:3, defRange:0, defMagic:0, attBonus:5, strBonus:5, attackSpeed:4,
+  { id:'thug', name:'Thug', level:10, hp:18, attack:7, strength:5, defLevel:9, defStab:2, defSlash:3, defCrush:3, defRange:0, defMagic:0, attBonus:5, strBonus:5, attackSpeed:4, damageType:'stab',
     loot:[
       always('Bones',1,'bones'),
-      d('Iron med helm',4,1,'iron_full_helm'), d('Iron battleaxe',2,1,'iron_battleaxe'), d('Steel axe',1,1,'steel_axe'),
+      d('Iron med helm',4,1,'iron_med_helm'), d('Iron battleaxe',2,1,'iron_battleaxe'), d('Steel axe',1,1,'steel_axe'),
       d('Nature rune ×2',13,2,'naturerune'), d('Chaos rune ×2',4,2,'chaosrune'),
       d('Cosmic rune ×2',1,2,'cosmicrune'), d('Law rune ×2',1,2,'lawrune'), d('Death rune ×2',1,2,'deathrune'),
       herbDrop(w(24)),
@@ -853,7 +861,7 @@ const MONSTERS = [
       coins(23,8), coins(12,15), coins(2,30), coins(1,20),
     ] },
 
-  { id:'chaos_druid', name:'Chaos Druid', level:13, hp:20, attack:8, strength:8, defLevel:12, magicLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'chaos_druid', name:'Chaos Druid', level:13, hp:20, attack:8, strength:8, defLevel:12, magicLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Law rune ×2',7,2,'lawrune'), d('Air rune ×36',3,36,'airrune'),
@@ -867,7 +875,7 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_taverly/configs/taverly.npc
-  { id:'druid', name:'Druid', level:33, hp:30, attack:28, strength:28, defLevel:32, magicLevel:25, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:0, strBonus:0, attackSpeed:4,
+  { id:'druid', name:'Druid', level:33, hp:30, attack:28, strength:28, defLevel:32, magicLevel:25, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:0, strBonus:0, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Earth rune ×27',4,27,'earthrune'), d('Water rune ×9',2,9,'waterrune'),
@@ -888,7 +896,7 @@ const MONSTERS = [
   // (negative magic def → weak to magic, per the wiki). death_drop=null (no
   // guaranteed bones — ethereal). Drop table verbatim from
   // otherworldly_being.rs2 ([ai_queue3], random(128)). No clue. ~18/128 nothing.
-  { id:'otherworldly_being', name:'Otherworldly being', level:64, hp:66, attack:56, strength:56, defLevel:46, defStab:15, defSlash:10, defCrush:20, defRange:15, defMagic:-5, attackSpeed:4,
+  { id:'otherworldly_being', name:'Otherworldly being', level:64, hp:66, attack:56, strength:56, defLevel:46, defStab:15, defSlash:10, defCrush:20, defRange:15, defMagic:-5, attackSpeed:4, damageType:'crush',
     loot:[
       d('Nature rune ×5',9,5,'naturerune'),
       d('Chaos rune ×4',8,4,'chaosrune'),
@@ -908,7 +916,7 @@ const MONSTERS = [
   // TIER 3 — MID
   // =====================================================================
 
-  { id:'skeleton_unarmed', name:'Skeleton (unarmed)', level:21, hp:24, attack:17, strength:17, defLevel:17, defStab:5, defSlash:5, defCrush:-5, defRange:5, defMagic:0, attackSpeed:4,
+  { id:'skeleton_unarmed', name:'Skeleton (unarmed)', level:21, hp:24, attack:17, strength:17, defLevel:17, defStab:5, defSlash:5, defCrush:-5, defRange:5, defMagic:0, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Bronze arrow ×2',7,2,'bronze_arrow'), d('Bronze arrow ×5',4,5,'bronze_arrow'),
@@ -923,7 +931,7 @@ const MONSTERS = [
       gemDrop(1/128),
     ] },
 
-  { id:'skeleton_armed', name:'Skeleton (armed)', level:22, hp:29, attack:15, strength:18, defLevel:17, defStab:9, defSlash:11, defCrush:-2, defRange:4, defMagic:1, attBonus:15, strBonus:14, attackSpeed:4,
+  { id:'skeleton_armed', name:'Skeleton (armed)', level:22, hp:29, attack:15, strength:18, defLevel:17, defStab:9, defSlash:11, defCrush:-2, defRange:4, defMagic:1, attBonus:15, strBonus:14, attackSpeed:4, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Iron med helm',6,1,'iron_med_helm'), d('Iron sword',4,1,'iron_sword'),
@@ -937,7 +945,7 @@ const MONSTERS = [
       d('Bronze bar',5,1,'bronze_bar'), gemDrop(2/128),
     ] },
 
-  { id:'zombie_unarmed', name:'Zombie (unarmed)', level:13, hp:22, attack:8, strength:9, defLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'zombie_unarmed', name:'Zombie (unarmed)', level:13, hp:22, attack:8, strength:9, defLevel:10, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Bronze med helm',4,1,'bronze_med_helm'), d('Bronze longsword',1,1,'bronze_longsword'),
@@ -950,7 +958,7 @@ const MONSTERS = [
       d('Fishing bait ×5',37,5,'fishing_bait'), d('Copper ore',2,1,'copper_ore'),
     ] },
 
-  { id:'zombie_armed', name:'Zombie (armed)', level:24, hp:30, attack:19, strength:21, defLevel:16, defStab:9, defSlash:8, defCrush:12, defRange:11, defMagic:10, attBonus:5, strBonus:7, attackSpeed:4,
+  { id:'zombie_armed', name:'Zombie (armed)', level:24, hp:30, attack:19, strength:21, defLevel:16, defStab:9, defSlash:8, defCrush:12, defRange:11, defMagic:10, attBonus:5, strBonus:7, attackSpeed:5, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Iron mace',3,1,'iron_mace'), d('Iron dagger',2,1,'iron_dagger'),
@@ -965,10 +973,10 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_wilderness/configs/bandit_camp.npc (brawling_bandit; note: cfg vislvl 22)
-  { id:'bandit', name:'Bandit', level:22, hp:27, attack:17, strength:17, defLevel:17, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:11, strBonus:12, attackSpeed:4,
+  { id:'bandit', name:'Bandit', level:22, hp:27, attack:17, strength:17, defLevel:17, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:11, strBonus:12, attackSpeed:4, damageType:'stab',
     loot:[
       always('Bones',1,'bones'),
-      d('Iron scimitar',4,1,'iron_scimitar'), d('Steel sq shield',2,1,'mithril_sq_shield'), d('Steel axe',1,1,'steel_axe'),
+      d('Iron scimitar',4,1,'iron_scimitar'), dProxy('Steel sq shield',2,1,'mithril_sq_shield','steel_sq_shield'), d('Steel axe',1,1,'steel_axe'),
       d('Chaos rune ×6',3,6,'chaosrune'), d('Water rune ×9',3,9,'waterrune'),
       d('Air rune ×10',2,10,'airrune'), d('Death rune ×2',2,2,'deathrune'),
       d('Law rune ×3',2,3,'lawrune'), d('Blood rune ×2',1,2,'bloodrune'),
@@ -980,7 +988,7 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_yanille/configs/yanille.npc
-  { id:'chaos_druid_warrior', name:'Chaos Druid Warrior', level:37, hp:40, attack:32, strength:34, defLevel:25, defStab:13, defSlash:17, defCrush:14, defRange:14, defMagic:-4, attBonus:9, strBonus:5, attackSpeed:5,
+  { id:'chaos_druid_warrior', name:'Chaos Druid Warrior', level:37, hp:40, attack:32, strength:34, defLevel:25, defStab:13, defSlash:17, defCrush:14, defRange:14, defMagic:-4, attBonus:9, strBonus:5, attackSpeed:5, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Black dagger',1,1,'black_dagger'),
@@ -995,7 +1003,7 @@ const MONSTERS = [
       gemDrop(w(1)),
     ] },
 
-  { id:'black_knight', name:'Black Knight', level:33, hp:42, attack:25, strength:25, defLevel:25, defStab:73, defSlash:76, defCrush:70, defRange:72, defMagic:-11, attBonus:18, strBonus:16, attackSpeed:5,
+  { id:'black_knight', name:'Black Knight', level:33, hp:42, attack:25, strength:25, defLevel:25, defStab:73, defSlash:76, defCrush:70, defRange:72, defMagic:-11, attBonus:18, strBonus:16, attackSpeed:5, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Iron sword',4,1,'iron_sword'), d('Iron full helm',2,1,'iron_full_helm'), d('Steel mace',1,1,'steel_mace'),
@@ -1015,7 +1023,7 @@ const MONSTERS = [
   // =====================================================================
 
   { id:'giant', name:'Hill Giant', level:28, hp:35, attack:18, strength:22, defLevel:26,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:18, strBonus:16, attackSpeed:6,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:18, strBonus:16, attackSpeed:6, damageType:'crush',
     loot:[
       always('Big bones',1,'big_bones'),
       d('Iron full helm',5,1,'iron_full_helm'), d('Iron dagger',4,1,'iron_dagger'),
@@ -1031,7 +1039,7 @@ const MONSTERS = [
       gemDrop(w(3)),
     ] },
 
-  { id:'hobgoblin_armed', name:'Hobgoblin (armed)', level:42, hp:49, attack:33, strength:31, defLevel:36, defStab:1, defSlash:1, defCrush:0, defRange:0, defMagic:0, attBonus:8, strBonus:10, attackSpeed:6,
+  { id:'hobgoblin_armed', name:'Hobgoblin (armed)', level:42, hp:49, attack:33, strength:31, defLevel:36, defStab:1, defSlash:1, defCrush:0, defRange:0, defMagic:0, attBonus:8, strBonus:10, attackSpeed:6, damageType:'stab',
     loot:[
       always('Bones',1,'bones'),
       d('Iron sword',3,1,'iron_sword'), d('Steel dagger',3,1,'steel_dagger'), d('Steel longsword',1,1,'steel_longsword'),
@@ -1042,7 +1050,7 @@ const MONSTERS = [
       d('Limpwurt root',21,1,'limpwurt_root'), d('Goblin armour',2,1,'goblin_armour'), gemDrop(2/128),
     ] },
 
-  { id:'hobgoblin_unarmed', name:'Hobgoblin', level:28, hp:29, attack:22, strength:24, defLevel:24, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'hobgoblin_unarmed', name:'Hobgoblin', level:28, hp:29, attack:22, strength:24, defLevel:24, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Bronze spear',3,1,'bronze_spear'), d('Iron spear',2,1,'iron_spear'), d('Steel spear',2,1,'steel_spear'),
@@ -1057,7 +1065,7 @@ const MONSTERS = [
     ] },
 
   { id:'earth_warrior', name:'Earth Warrior', level:51, hp:54, attack:42, strength:42, defLevel:42,
-    defStab:30, defSlash:40, defCrush:20, defRange:30, defMagic:10, attackSpeed:4,
+    defStab:30, defSlash:40, defCrush:20, defRange:30, defMagic:10, attackSpeed:4, damageType:'crush',
     loot:[
       d('Steel spear',3,1,'steel_spear'), d('Staff of earth',2,1,'staff_of_earth'),
       d('Earth rune ×12',13,12,'earthrune'), d('Nature rune ×3',9,3,'naturerune'),
@@ -1070,10 +1078,10 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_falador/configs/falador.npc (attackrate 7)
-  { id:'white_knight', name:'White Knight', level:36, hp:52, attack:27, strength:29, defLevel:21, defStab:83, defSlash:76, defCrush:70, defRange:74, defMagic:-11, attBonus:30, strBonus:31, attackSpeed:7,
+  { id:'white_knight', name:'White Knight', level:36, hp:52, attack:27, strength:29, defLevel:21, defStab:83, defSlash:76, defCrush:70, defRange:74, defMagic:-11, attBonus:30, strBonus:31, attackSpeed:7, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
-      d('Iron longsword',2,1,'iron_sword'), d('Steel sword',1,1,'steel_longsword'), d('Steel med helm',1,1,'steel_med_helm'),
+      d('Iron longsword',2,1,'iron_longsword'), d('Steel sword',1,1,'steel_sword'), d('Steel med helm',1,1,'steel_med_helm'),
       d('Mind rune ×5',11,5,'mindrune'), d('Nature rune ×4',4,4,'naturerune'),
       d('Body rune ×11',3,11,'bodyrune'), d('Chaos rune ×2',3,2,'chaosrune'),
       d('Water rune ×27',3,27,'waterrune'), d('Mithril arrow ×5',2,5,'mithril_arrow'),
@@ -1086,7 +1094,7 @@ const MONSTERS = [
     ] },
 
   { id:'ice_warrior', name:'Ice Warrior', level:57, hp:59, attack:47, strength:47, defLevel:47,
-    defStab:30, defSlash:40, defCrush:20, defRange:30, defMagic:10, attackSpeed:4,
+    defStab:30, defSlash:40, defCrush:20, defRange:30, defMagic:10, attackSpeed:4, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
       d('Iron battleaxe',3,1,'iron_battleaxe'), d('Mithril mace',1,1,'mithril_mace'),
@@ -1100,12 +1108,12 @@ const MONSTERS = [
     ] },
 
   // NPC config @274: areas/area_ardougne_east/configs/legends_guild/legends_guild.npc
-  { id:'shadow_warrior', name:'Shadow Warrior', level:48, hp:67, attack:36, strength:33, defLevel:36, magicLevel:0, defStab:43, defSlash:31, defCrush:19, defRange:38, defMagic:15, attBonus:20, strBonus:26, attackSpeed:4,
+  { id:'shadow_warrior', name:'Shadow Warrior', level:48, hp:67, attack:36, strength:33, defLevel:36, magicLevel:0, defStab:43, defSlash:31, defCrush:19, defRange:38, defMagic:15, attBonus:20, strBonus:26, attackSpeed:4, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
-      d('Adamant spear',1,1,'adamant_spear'), d('Black dagger (p)',1,1,'black_dagger'),
+      d('Adamant spear',1,1,'adamant_spear'), dProxy('Black dagger (p)',1,1,'black_dagger','black_dagger_p'),
       d('Black knife',1,1,'black_knife'), d('Black longsword',1,1,'black_longsword'),
-      d('Black robe',1,1,'goblin_armour'),
+      dProxy('Black robe',1,1,'goblin_armour','black_robe'),
       d('Cosmic rune ×3',9,3,'cosmicrune'), d('Blood rune ×2',6,2,'bloodrune'),
       d('Air rune ×45',4,45,'airrune'), d('Death rune ×2',4,2,'deathrune'),
       coins(47,8),
@@ -1114,10 +1122,10 @@ const MONSTERS = [
       herbDrop(w(18)),
     ] },
 
-  { id:'paladin', name:'Paladin', level:62, hp:57, attack:54, strength:54, defLevel:54, defStab:87, defSlash:84, defCrush:76, defRange:79, defMagic:-10, attBonus:20, strBonus:22, attackSpeed:5,
+  { id:'paladin', name:'Paladin', level:62, hp:57, attack:54, strength:54, defLevel:54, defStab:87, defSlash:84, defCrush:76, defRange:79, defMagic:-10, attBonus:20, strBonus:22, attackSpeed:5, damageType:'slash',
     loot:[
       always('Bones',1,'bones'),
-      d('Steel sword',2,1,'steel_longsword'), d('Steel longsword',1,1,'steel_longsword'), d('Steel full helm',1,1,'steel_full_helm'),
+      d('Steel sword',2,1,'steel_sword'), d('Steel longsword',1,1,'steel_longsword'), d('Steel full helm',1,1,'steel_full_helm'),
       d('Water rune ×30',13,30,'waterrune'), d('Blood rune ×1',1,1,'bloodrune'),
       d('Iron bar',9,1,'iron_bar'), d('Mithril bar',1,1,'mithril_bar'), d('Steel bar',1,1,'steel_bar'),
       herbDrop(w(8)),
@@ -1126,10 +1134,10 @@ const MONSTERS = [
     ] },
 
 
-  { id:'mossgiant', name:'Moss Giant', level:42, hp:60, attack:30, strength:30, defLevel:30, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:33, strBonus:31, attackSpeed:6,
+  { id:'mossgiant', name:'Moss Giant', level:42, hp:60, attack:30, strength:30, defLevel:30, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:33, strBonus:31, attackSpeed:6, damageType:'crush',
     loot:[
       always('Big bones',1,'big_bones'),
-      d('Black sq shield',5,1,'black_kiteshield'), d('Magic staff',2,1,'magic_staff'),
+      d('Black sq shield',5,1,'black_sq_shield'), d('Magic staff',2,1,'magic_staff'),
       d('Steel med helm',2,1,'steel_med_helm'), d('Mithril sword',2,1,'mithril_sword'),
       d('Mithril spear',2,1,'mithril_spear'),
       d('Steel kiteshield',1,1,'steel_kiteshield'),
@@ -1144,7 +1152,7 @@ const MONSTERS = [
       gemDrop(w(4)),
     ] },
 
-  { id:'icegiant', name:'Ice Giant', level:49, hp:70, attack:40, strength:40, defLevel:40, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:29, strBonus:31, attackSpeed:5,
+  { id:'icegiant', name:'Ice Giant', level:49, hp:70, attack:40, strength:40, defLevel:40, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:29, strBonus:31, attackSpeed:5, damageType:'slash',
     loot:[
       always('Big bones',1,'big_bones'),
       d('Iron 2h sword',5,1,'iron_2h_sword'), d('Black kiteshield',4,1,'black_kiteshield'),
@@ -1163,7 +1171,7 @@ const MONSTERS = [
   // Jogre — EXACT from jogre.rs2 @274: randominc(128) → denominator 129 (0..128
   // inclusive). death_drop = big bones (guaranteed). Medium clue /129. Extra
   // bones/big-bones rows are additional LOOT rolls on top of the guaranteed drop.
-  { id:'jogre', name:'Jogre', level:53, hp:60, attack:43, strength:43, defLevel:43, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:22, strBonus:20, attackSpeed:6,
+  { id:'jogre', name:'Jogre', level:53, hp:60, attack:43, strength:43, defLevel:43, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:22, strBonus:20, attackSpeed:6, damageType:'crush',
     loot:[
       always('Big bones',1,'big_bones'),
       d('Bronze spear',30,1,'bronze_spear',129),
@@ -1183,8 +1191,8 @@ const MONSTERS = [
   // death_drop = big bones, guaranteed). Combat stats are OSRS-based 2004
   // approximations (rev274 npc configs aren't in the scripts repo): level 69,
   // 80 HP, slow + inaccurate, crush-resistant. Magic level 1 (melee monster).
-  { id:'mountain_troll', name:'Mountain Troll', level:69, hp:80, attack:71, strength:71, defLevel:71, magicLevel:0,
-    defStab:0, defSlash:0, defCrush:15, defRange:0, defMagic:0, attBonus:20, strBonus:20, attackSpeed:5,
+  { id:'mountain_troll', name:'Mountain Troll', level:69, hp:90, attack:40, strength:75, defLevel:40, magicLevel:0,
+    defStab:0, defSlash:0, defCrush:10, defRange:200, defMagic:200, attBonus:20, strBonus:20, attackSpeed:6, damageType:'crush',
     loot:[
       always('Big bones',1,'big_bones'),
       d('Steel med helm',4,1,'steel_med_helm'),
@@ -1212,7 +1220,7 @@ const MONSTERS = [
   // (The guaranteed prison-key drop is a quest item, not lootable gp — omitted.)
   // NPC config @274: quests/quest_troll/configs/quest_troll.npc (magic/range def 200)
   { id:'troll_general', name:'Troll General', level:113, hp:140, attack:70, strength:140, defLevel:40, magicLevel:0,
-    defStab:35, defSlash:60, defCrush:35, defRange:200, defMagic:200, attBonus:60, strBonus:100, attackSpeed:5,
+    defStab:35, defSlash:60, defCrush:35, defRange:200, defMagic:200, attBonus:60, strBonus:100, attackSpeed:4, damageType:'slash',
     loot:[
       always('Big bones',1,'big_bones'),
       d('Steel platebody',4,1,'steel_platebody'),
@@ -1242,7 +1250,7 @@ const MONSTERS = [
   // Chaos Dwarf — EXACT from chaos_dwarf.rs2 @274 ([ai_queue3,dwarf_chaos],
   // random(128), death_drop = bones). Notable: muddy key 7/128, randomjewel
   // 5/128 (the 123-128 else branch). NO herb and NO ultra-rare sub-table.
-  { id:'chaos_dwarf', name:'Chaos Dwarf', level:48, hp:61, attack:38, strength:42, defLevel:28, defStab:40, defSlash:34, defCrush:25, defRange:35, defMagic:10, attBonus:13, strBonus:9, attackSpeed:4,
+  { id:'chaos_dwarf', name:'Chaos Dwarf', level:48, hp:61, attack:38, strength:42, defLevel:28, defStab:40, defSlash:34, defCrush:25, defRange:35, defMagic:10, attBonus:13, strBonus:9, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
       d('Steel full helm',2,1,'steel_full_helm'),
@@ -1266,7 +1274,7 @@ const MONSTERS = [
   // No clue drop. randomherb 14/128, randomjewel 2/128; rolls 100..127 (28/128)
   // yield nothing. Roll weights sum to 100 + 28 nothing = 128.
   { id:'water_elemental', name:'Water Elemental', level:34, hp:30, attack:30, strength:30, defLevel:30, magicLevel:30,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:5,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'stab',
     loot:[
       always('Vial of water',1,'vial_water'),
       d('Water rune ×15',13,15,'waterrune'),
@@ -1282,11 +1290,11 @@ const MONSTERS = [
       gemDrop(w(2)),
     ] },
 
-  { id:'hellhound', name:'Hellhound', level:122, hp:116, attack:105, strength:104, defLevel:102, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'hellhound', name:'Hellhound', level:122, hp:116, attack:105, strength:104, defLevel:102, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'stab',
     loot:[ always('Bones',1,'bones') ] },
 
   { id:'lesser_demon', name:'Lesser Demon', level:82, hp:79, attack:68, strength:70, defLevel:71,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:-10, attackSpeed:4,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:-10, attackSpeed:4, damageType:'slash',
     loot:[
       always('Ashes',1,'ashes'),
       gemDrop(w(4)),
@@ -1301,7 +1309,7 @@ const MONSTERS = [
     ] },
 
   { id:'greater_demon', name:'Greater Demon', level:92, hp:87, attack:76, strength:78, defLevel:81,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:-10, attackSpeed:4,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:-10, attackSpeed:4, damageType:'slash',
     loot:[
       always('Ashes',1,'ashes'),
       d('Steel 2h sword',4,1,'steel_2h_sword'), d('Steel axe',3,1,'steel_axe'),
@@ -1314,7 +1322,7 @@ const MONSTERS = [
       gemDrop(w(5)),
     ] },
 
-  { id:'firegiant', name:'Fire Giant', level:86, hp:111, attack:65, strength:65, defLevel:65, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:29, strBonus:31, attackSpeed:5,
+  { id:'firegiant', name:'Fire Giant', level:86, hp:111, attack:65, strength:65, defLevel:65, defStab:0, defSlash:3, defCrush:2, defRange:0, defMagic:0, attBonus:29, strBonus:31, attackSpeed:5, damageType:'slash',
     loot:[
       always('Big bones',1,'big_bones'),
       d('Steel axe',3,1,'steel_axe'), d('Mithril sq shield',2,1,'mithril_sq_shield'),
@@ -1331,7 +1339,7 @@ const MONSTERS = [
     ] },
 
   { id:'black_demon', name:'Black Demon', level:172, hp:157, attack:145, strength:148, defLevel:152,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:-10, attackSpeed:4,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:-10, attackSpeed:4, damageType:'slash',
     loot:[
       always('Ashes',1,'ashes'),
       d('Black sword',4,1,'black_sword'), d('Steel battleaxe',3,1,'steel_battleaxe'),
@@ -1352,12 +1360,12 @@ const MONSTERS = [
   // def, max hit 8); lvl 92 is a melee variant with +50 magic defence.
   // NPC config @274: quests/quest_horror/configs/quest_horror.npc (horror_dagganoth_jr)
   { id:'dagannoth', name:'Dagannoth (lvl 74)', level:74, hp:70, attack:68, strength:70, defLevel:50,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:0, strBonus:0, attackSpeed:4, atkType:'ranged',
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attBonus:0, strBonus:0, attackSpeed:4, damageType:'stab', atkType:'ranged',
     loot:DAGANNOTH_LOOT() },
 
   // NPC config @274: quests/quest_horror/configs/quest_horror.npc (horror_dagannoth_medium)
   { id:'dagannoth_92', name:'Dagannoth (lvl 92)', level:92, hp:120, attack:68, strength:70, defLevel:71,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:50, attBonus:0, strBonus:0, attackSpeed:4, atkType:'melee',
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:50, attBonus:0, strBonus:0, attackSpeed:4, damageType:'stab', atkType:'melee',
     loot:DAGANNOTH_LOOT() },
 
   // Rock Crab (Fremennik coast) — quest_viking/horror_rockcrab.npc: vislvl 13,
@@ -1365,7 +1373,7 @@ const MONSTERS = [
   // no def bonuses, death_drop=null. Both the normal and small variants share
   // ONE drop table (rockcrab_drops, random128) so we model one entry. Drops an
   // EASY clue (~trail_easycluedrop). Loot is low-value mining/fishing junk.
-  { id:'rock_crab', name:'Rock Crab', level:13, hp:50, attack:1, strength:1, defLevel:1, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'rock_crab', name:'Rock Crab', level:13, hp:50, attack:1, strength:1, defLevel:1, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'crush',
     loot:[
       d('Bronze pickaxe',6,1,'bronze_pickaxe'),
       d('Iron pickaxe',5,1,'iron_pickaxe'),
@@ -1392,24 +1400,24 @@ const MONSTERS = [
   // design — they're killed purely for combat xp. maxHit left to the str formula
   // except where the in-game cap is lower (poison spider). They poison the player
   // in-game, but monster→player poison isn't modelled here (safespot or out-heal).
-  { id:'deadly_red_spider', name:'Deadly red spider', level:34, hp:20, attack:34, strength:34, defLevel:28, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'deadly_red_spider', name:'Deadly red spider', level:34, hp:35, attack:30, strength:25, defLevel:30, defStab:15, defSlash:16, defCrush:7, defRange:16, defMagic:12, attackSpeed:4, damageType:'stab',
     loot:[] },
 
-  { id:'jungle_spider', name:'Jungle spider', level:44, hp:28, attack:44, strength:44, defLevel:38, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+  { id:'jungle_spider', name:'Jungle spider', level:44, hp:50, attack:35, strength:37, defLevel:35, defStab:20, defSlash:20, defCrush:10, defRange:20, defMagic:17, attackSpeed:4, damageType:'stab',
     loot:[] },
 
-  { id:'poison_spider', name:'Poison spider', level:64, hp:25, attack:54, strength:54, defLevel:52, defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, maxHit:5, poisons:true, poisonMax:6,
+  { id:'poison_spider', name:'Poison spider', level:64, hp:64, attack:50, strength:58, defLevel:52, defStab:20, defSlash:17, defCrush:10, defRange:14, defMagic:14, attackSpeed:4, damageType:'stab', poisons:true, poisonMax:6,
     loot:[] },
 
   // Baby blue dragon — EXACT from all.npc @rev225 (babybluedragon): vislvl 48,
   // hp 50, att/str/def 40; def bonuses stab30/slash50/crush50/range30/magic40.
   // death_drop=babydragon_bones (guaranteed dragon bones, no other table) — killed
   // purely for bones. No dragonfire (babies don't breathe). Attacks melee (slash).
-  { id:'baby_blue_dragon', name:'Baby blue dragon', level:48, hp:50, attack:40, strength:40, defLevel:40, defStab:30, defSlash:50, defCrush:50, defRange:30, defMagic:40, attackSpeed:4,
+  { id:'baby_blue_dragon', name:'Baby blue dragon', level:48, hp:50, attack:40, strength:40, defLevel:40, defStab:30, defSlash:50, defCrush:50, defRange:30, defMagic:40, attackSpeed:4, damageType:'slash',
     loot:[ always('Babydragon bones',1,'babydragon_bones') ] },
 
   { id:'green_dragon', name:'Green Dragon', level:79, hp:75, attack:68, strength:68, defLevel:68, magicLevel:68, dragonfire:true,
-    defStab:20, defSlash:40, defCrush:40, defRange:20, defMagic:30, attackSpeed:4,
+    defStab:20, defSlash:40, defCrush:40, defRange:20, defMagic:30, attackSpeed:4, damageType:'slash',
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Green dragonhide',1,'dragonhide_green'),
       d('Steel platelegs',4,1,'steel_platelegs'), d('Steel battleaxe',3,1,'steel_battleaxe'),
@@ -1425,7 +1433,7 @@ const MONSTERS = [
     ] },
 
   { id:'blue_dragon', name:'Blue Dragon', level:111, hp:105, attack:95, strength:95, defLevel:95, dragonfire:true,
-    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
+    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4, damageType:'slash',
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Blue dragonhide',1,'dragonhide_blue'),
       d('Steel platelegs',4,1,'steel_platelegs'), d('Steel battleaxe',3,1,'steel_battleaxe'),
@@ -1447,7 +1455,7 @@ const MONSTERS = [
   // rolls a HARD clue tertiary (~trail_hardcluedrop, 1/128). Sits between the blue
   // (lvl 111) and black (lvl 227) dragons.
   { id:'red_dragon', name:'Red Dragon', level:152, hp:140, attack:130, strength:130, defLevel:130, dragonfire:true,
-    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
+    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4, damageType:'slash',
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Red dragonhide',1,'dragonhide_red'),
       d('Mithril 2h sword',4,1,'mithril_2h_sword'), d('Mithril axe',3,1,'mithril_axe'),
@@ -1463,15 +1471,15 @@ const MONSTERS = [
     ] },
 
   { id:'black_dragon', name:'Black Dragon', level:227, hp:190, attack:200, strength:200, defLevel:200, magicLevel:100, dragonfire:true,
-    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
+    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4, damageType:'slash',
     loot:[
       always('Dragon bones',1,'dragon_bones'), always('Black dragonhide',1,'dragonhide_black'),
       d('Mithril 2h sword',4,1,'mithril_2h_sword'), d('Mithril axe',3,1,'mithril_axe'),
       d('Mithril battleaxe',3,1,'mithril_battleaxe'), d('Rune knife ×2',3,2,'rune_knife'),
       d('Mithril kiteshield',1,1,'mithril_kiteshield'), d('Adamant platebody',1,1,'adamant_platebody'),
       d('Rune longsword',1,1,'rune_longsword'),
-      d('Adamant javelin ×30',20,30,'steel_javelin'), d('Fire rune ×50',8,50,'firerune'),
-      d('Adamant dart(p) ×16',7,16,'adamant_dart'),
+      d('Adamant javelin ×30',20,30,'adamant_javelin'), d('Fire rune ×50',8,50,'firerune'),
+      dProxy('Adamant dart(p) ×16',7,16,'adamant_dart','adamant_dart_p'),
       d('Law rune ×10',5,10,'lawrune'), d('Blood rune ×15',3,15,'bloodrune'), d('Air rune ×75',1,75,'airrune'),
       coins(40,196), coins(10,330), coins(1,690),
       d('Adamantite bar',3,1,'adamantite_bar'), d('Chocolate cake',3,1,'chocolate_cake'),
@@ -1521,7 +1529,7 @@ const MONSTERS = [
       // tertiary, rolled BEFORE the table and returning early (so it replaces
       // the normal drop, not stacks with it): random(1024) = 0.
       d('Dragon platelegs',1,1,'dragon_platelegs',1024),
-      d('Rune longsword',1,1,'rune_longsword'), d('Adamant dart(p) ×16',1,16,'adamant_dart'),
+      d('Rune longsword',1,1,'rune_longsword'), dProxy('Adamant dart(p) ×16',1,16,'adamant_dart','adamant_dart_p'),
       d('Mithril 2h sword',4,1,'mithril_2h_sword'), d('Mithril axe',3,1,'mithril_axe'),
       d('Mithril battleaxe',3,1,'mithril_battleaxe'), d('Rune knife ×2',3,2,'rune_knife'),
       d('Mithril kiteshield',1,1,'mithril_kiteshield'), d('Adamant platebody',1,1,'adamant_platebody'),
@@ -1593,7 +1601,7 @@ const MONSTERS = [
   // No drop table & no config death_drop beyond bones — drops ONLY bones (100%).
   // Popular low-supply melee/ranged leveling spot, so left visible (not "pass").
   { id:'ghoul', name:'Ghoul', level:42, hp:50, attack:30, strength:40, defLevel:30,
-    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4,
+    defStab:0, defSlash:0, defCrush:0, defRange:0, defMagic:0, attackSpeed:4, damageType:'crush',
     loot:[
       always('Bones',1,'bones'),
     ] },
@@ -1603,7 +1611,7 @@ const MONSTERS = [
   // NO weighted drop table exists in content — the NPC's only drop is the config
   // death_drop=iron_battleaxe (guaranteed), and it drops NO bones (animated axe).
   { id:'magicaxe', name:'Magic axe', level:42, hp:44, attack:38, strength:38, defLevel:29,
-    defStab:10, defSlash:5, defCrush:15, defRange:10, defMagic:5, attackSpeed:4,
+    defStab:10, defSlash:5, defCrush:15, defRange:10, defMagic:5, attackSpeed:4, damageType:'slash',
     loot:[
       always('Iron battleaxe',1,'iron_battleaxe'),
     ] },
@@ -1612,14 +1620,19 @@ const MONSTERS = [
   // att 10 / str 80 / def 10 / ranged 80. Def bonuses stab/slash/crush/magic 50,
   // range 70. Shares the elf_warrior drop table; drops a HARD clue.
   { id:'elf_warrior_90', name:'Elf warrior (90)', level:90, hp:105, attack:10, strength:80, defLevel:10, ranged:80,
+    // Bow-armed: regicide_darkelf.rs2 routes it to ~npc_rangeattack, so its
+    // accuracy and max hit come off rangeLevel, and Protect from Missiles is
+    // what blocks it. damageType is separately 'stab' — source checks the shot
+    // against the player's stab defence, not their ranged defence.
     defStab:50, defSlash:50, defCrush:50, defRange:70, defMagic:50, attackSpeed:4,
+    atkType:'ranged', damageType:'stab', rangeLevel:80, rangeAttBonus:0, rangeBonus:8,
     loot: ELF_WARRIOR_LOOT() },
 
   // Elf warrior (lvl 108) — regicide_darkelf2 @274: melee (crystal halberd). hp 105,
   // att 95 / str 95 / def 80. Def bonuses stab 50, slash/crush 70, magic 60, range 50.
   // Shares the elf_warrior drop table; drops a HARD clue.
   { id:'elf_warrior_108', name:'Elf warrior (108)', level:108, hp:105, attack:95, strength:95, defLevel:80,
-    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4,
+    defStab:50, defSlash:70, defCrush:70, defRange:50, defMagic:60, attackSpeed:4, damageType:'stab',
     loot: ELF_WARRIOR_LOOT() },
 
 ];
