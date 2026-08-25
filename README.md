@@ -56,3 +56,17 @@ python hiscores_proxy.py
 
 That serves the app on http://localhost:8000/ and proxies the lookups. Stdlib
 only, no build step. See [docs/hiscores.md](docs/hiscores.md).
+
+## Risk pane
+
+Every other number in the app is an average. The Risk tab re-rolls the fight
+thousands of times and shows the spread instead — what an hour looks like at the
+tenth percentile, how often you run dry before the kill count you wanted, the
+odds on a particular drop.
+
+```bash
+node tools/run-risk.js
+```
+
+That checks the Monte Carlo model's averages still land on the simulator's own
+numbers. See [docs/risk.md](docs/risk.md).

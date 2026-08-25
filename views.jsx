@@ -2001,6 +2001,273 @@ function LootPane({input, result, lootPrefs={}, setLootPref, setLootPrefsBulk, s
 }
 
 // =======================================================================
+// RISK PANE — Monte Carlo spread around the averages every other pane shows
+// =======================================================================
+//
+// Every other number in this app is an expectation. That is the right default
+// and it is silent about the thing people actually get burned by: a green
+// dragon trip is worth a fortune per hour on average, and nearly all of that
+// is variance. This pane re-rolls the same fight thousands of times through
+// risk.js and reports the spread instead of the centre.
+//
+// It deliberately does NOT recompute on every keystroke. A full run is one to
+// three seconds of blocking arithmetic in the browser, so the pane runs on
+// demand, keeps showing the last answer, and marks it stale when the setup
+// moves underneath it. Recomputing automatically would freeze the tab every
+// time a level changed.
+function RiskBar({label, dist, fmt, colour}){
+  // p10 to p90 drawn against the full sampled range, with the median marked.
+  // A bar answers "how wide is this" far quicker than three numbers do.
+  const span  = Math.max(1e-9, dist.max - dist.min);
+  const left  = ((dist.p10 - dist.min) / span) * 100;
+  const width = Math.max(1.5, ((dist.p90 - dist.p10) / span) * 100);
+  const mid   = ((dist.p50 - dist.min) / span) * 100;
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:4, padding:'9px 11px',
+      background:'var(--bg-1)', border:'1px solid var(--border-1)', borderRadius:3}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline'}}>
+        <span className="label-cap">{label}</span>
+        <span className="num" style={{fontSize:14, color:`var(--${colour})`}}>{fmt(dist.p50)}</span>
+      </div>
+      <div style={{position:'relative', height:6, background:'var(--bg-0)',
+        border:'1px solid var(--border-1)', borderRadius:3, overflow:'hidden'}}>
+        <div style={{position:'absolute', left:`${left}%`, width:`${width}%`, top:0, bottom:0,
+          background:`color-mix(in oklab, var(--${colour}) 45%, transparent)`}} />
+        <div style={{position:'absolute', left:`calc(${mid}% - 1px)`, width:2, top:0, bottom:0,
+          background:`var(--${colour})`}} />
+      </div>
+      <div style={{display:'flex', justifyContent:'space-between',
+        fontFamily:'var(--mono)', fontSize:9.5, color:'var(--text-4)'}}>
+        <span>p10 {fmt(dist.p10)}</span>
+        <span>mean {fmt(dist.mean)}</span>
+        <span>p90 {fmt(dist.p90)}</span>
+      </div>
+    </div>
+  );
+}
+
+function RiskPane({input, result}){
+  const RM = window.RiskModel;
+  const [samples, setSamples] = React.useState(5000);
+  const [horizon, setHorizon] = React.useState(60);
+  const [targetKills, setTargetKills] = React.useState(50);
+  const [gpTarget, setGpTarget] = React.useState(500000);
+  const [dropId, setDropId] = React.useState('');
+  const [run, setRun] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  const dropOptions = React.useMemo(
+    () => RM ? RM.targetDropOptions(result) : [], [RM, result]);
+
+  // What the answer on screen was computed against. When this moves, the
+  // numbers describe a setup the user is no longer looking at.
+  const stamp = React.useMemo(() => JSON.stringify([
+    input.monster && input.monster.id, input.combatType, input.weapon, input.ammo,
+    input.spell, input.style, input.gear, input.prayers, input.boosts,
+    input.attack, input.strength, input.defence, input.ranged, input.magic, input.prayer,
+    input.trip, input.cannon, input.lootPrefs,
+    result.ttkSec, result.gpPerKill,
+    samples, horizon, targetKills, gpTarget, dropId
+  ]), [input, result, samples, horizon, targetKills, gpTarget, dropId]);
+
+  const stale = run != null && run.stamp !== stamp;
+
+  const execute = React.useCallback(() => {
+    if (!RM) return;
+    setBusy(true);
+    // Yield before taking the main thread, so the button's busy state paints
+    // first — without it the click looks like it did nothing for a second.
+    //
+    // setTimeout, not requestAnimationFrame. A backgrounded tab composites no
+    // frames, so rAF callbacks never fire there and the run would sit at
+    // "sampling…" forever for anyone who started it and switched away. Timers
+    // are throttled in the background but they still arrive.
+    setTimeout(() => {
+      const started = performance.now();
+      let out = null, error = null;
+      try {
+        out = RM.analyze(result, input, {
+          samples, horizonMinutes: horizon, targetKills, gpTarget,
+          targetDropId: dropId || null
+        });
+      } catch (e) { error = e.message || String(e); }
+      setRun({ out, error, stamp, ms: performance.now() - started });
+      setBusy(false);
+    }, 16);
+  }, [RM, result, input, samples, horizon, targetKills, gpTarget, dropId, stamp]);
+
+  // One automatic run when the pane first opens, so it is useful without a
+  // click. Everything after that is explicit.
+  const opened = React.useRef(false);
+  React.useEffect(() => {
+    if (!opened.current){ opened.current = true; execute(); }
+  }, [execute]);
+
+  if (!RM) return (
+    <div style={{padding:'18px', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-3)'}}>
+      risk.js is not loaded — check the script tags in index.html.
+    </div>
+  );
+
+  const r = run && run.out;
+  const gp = n => (n == null || !isFinite(n)) ? '—' : fmtK(n);
+
+  return (
+    <div style={{overflowY:'auto'}}>
+      <div className="h-strip">
+        <span className="title">Monte Carlo</span>
+        <span className="meta">
+          {busy ? 'sampling…'
+            : r ? `${r.samples.toLocaleString()} trials · ${run.ms.toFixed(0)}ms · #${r.fingerprint}`
+            : 'not run'}
+        </span>
+      </div>
+
+      <div style={{padding:'10px 14px', display:'grid',
+        gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:10, alignItems:'end'}}>
+        <label style={{display:'flex', flexDirection:'column', gap:3}}>
+          <span className="label-cap">Trials</span>
+          <select className="input" value={samples} onChange={e => setSamples(+e.target.value)}
+            style={{fontSize:11}}>
+            <option value={1000}>1,000 · fastest</option>
+            <option value={5000}>5,000 · default</option>
+            <option value={10000}>10,000</option>
+            <option value={20000}>20,000 · slow</option>
+          </select>
+        </label>
+        <label style={{display:'flex', flexDirection:'column', gap:3}}>
+          <span className="label-cap">Horizon (min)</span>
+          <input className="input" type="number" min={1} max={1440} value={horizon}
+            onChange={e => setHorizon(Math.max(1, Math.min(1440, +e.target.value || 1)))}
+            style={{fontSize:11}} />
+        </label>
+        <label style={{display:'flex', flexDirection:'column', gap:3}}>
+          <span className="label-cap">Target kills</span>
+          <input className="input" type="number" min={1} max={10000} value={targetKills}
+            onChange={e => setTargetKills(Math.max(1, Math.min(10000, +e.target.value || 1)))}
+            style={{fontSize:11}} />
+        </label>
+        <label style={{display:'flex', flexDirection:'column', gap:3}}>
+          <span className="label-cap">GP target</span>
+          <input className="input" type="number" min={0} step={10000} value={gpTarget}
+            onChange={e => setGpTarget(Math.max(0, +e.target.value || 0))}
+            style={{fontSize:11}} />
+        </label>
+        <label style={{display:'flex', flexDirection:'column', gap:3}}>
+          <span className="label-cap">Target drop</span>
+          <select className="input" value={dropId} onChange={e => setDropId(e.target.value)}
+            style={{fontSize:11}}>
+            <option value="">— none —</option>
+            {dropOptions.map(o => (
+              <option key={o.id} value={o.id}>{o.name} · 1/{Math.round(1/o.chance)}</option>
+            ))}
+          </select>
+        </label>
+        <button className="btn" onClick={execute} disabled={busy}
+          style={{fontSize:11, padding:'6px 12px',
+            borderColor: stale ? 'var(--amber)' : undefined,
+            color: stale ? 'var(--amber)' : undefined}}>
+          {busy ? 'running…' : stale ? 'Re-run — setup changed' : 'Run'}
+        </button>
+      </div>
+
+      {run && run.error && (
+        <div style={{margin:'0 14px 12px', padding:'9px 11px', borderRadius:3,
+          background:'color-mix(in oklab, var(--amber) 14%, transparent)',
+          border:'1px solid var(--amber)',
+          fontFamily:'var(--mono)', fontSize:10.5, color:'var(--text-1)'}}>
+          risk model failed: {run.error}
+        </div>
+      )}
+
+      {stale && (
+        <div style={{margin:'0 14px 12px', padding:'8px 11px', borderRadius:3,
+          background:'color-mix(in oklab, var(--amber) 10%, transparent)',
+          border:'1px solid var(--amber)',
+          fontFamily:'var(--mono)', fontSize:10, color:'var(--text-2)'}}>
+          The setup changed since this ran — the numbers below describe the old one.
+        </div>
+      )}
+
+      {r && (
+        <div style={{opacity: stale ? 0.5 : 1, transition:'opacity 120ms'}}>
+
+          <div style={{padding:'4px 14px 12px', display:'grid',
+            gridTemplateColumns:'repeat(auto-fit, minmax(210px, 1fr))', gap:10}}>
+            <RiskBar label={`Net GP over ${horizon}m`} dist={r.horizonNetGp}
+              fmt={gp} colour="gold" />
+            <RiskBar label="Kill time" dist={r.killTimeSeconds}
+              fmt={v => fmtTime(v)} colour="teal" />
+            <RiskBar label={`Kills in ${horizon}m`} dist={r.horizonKills}
+              fmt={fmtInt} colour="green" />
+            {r.killsPerTrip && (
+              <RiskBar label="Kills per trip" dist={r.killsPerTrip} fmt={fmtInt} colour="violet" />
+            )}
+          </div>
+
+          <div className="h-strip"><span className="title">Odds</span>
+            <span className="meta">out of {r.samples.toLocaleString()} sampled runs</span></div>
+          <div style={{padding:'10px 14px', display:'grid',
+            gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10}}>
+            <MiniMetric k={`Food out by ${targetKills} kills`}
+              v={fmtPct(r.foodRunsOutProbability)} />
+            <MiniMetric k={`Clears ${fmtK(gpTarget)} gp in ${horizon}m`}
+              v={fmtPct(r.gpTargetProbability)} />
+            <MiniMetric k={`Worst 10% of ${horizon}m`} v={gp(r.horizonNetGp.p10)} />
+            <MiniMetric k={`Best 10% of ${horizon}m`} v={gp(r.horizonNetGp.p90)} />
+          </div>
+
+          {r.targetDrop && (
+            <>
+              <div className="h-strip"><span className="title">{r.targetDrop.name}</span>
+                <span className="meta">1 / {Math.round(1 / r.targetDrop.chance)} per kill</span></div>
+              <div style={{padding:'10px 14px', display:'grid',
+                gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10}}>
+                <MiniMetric k={`Seen by ${targetKills} kills`}
+                  v={fmtPct(r.targetDrop.byTargetKills)} />
+                <MiniMetric k={`Seen within ${horizon}m`}
+                  v={fmtPct(r.targetDrop.withinHorizon)} />
+                <MiniMetric k="Coin-flip at"
+                  v={isFinite(r.targetDrop.killsForEven)
+                    ? `${fmtInt(r.targetDrop.killsForEven)} kills` : '—'} />
+              </div>
+            </>
+          )}
+
+          <div className="h-strip"><span className="title">Model coverage</span>
+            <span className="meta">what carries real variance</span></div>
+          <div style={{padding:'10px 14px', display:'grid',
+            gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:10}}>
+            <MiniMetric k="Player damage"   v={r.coverage.playerDamage} />
+            <MiniMetric k="Incoming damage" v={r.coverage.incomingDamage} />
+            <MiniMetric k="Loot occurrence" v={fmtPct(r.coverage.lootOccurrence)} />
+            <MiniMetric k="Loot quantity"   v={r.coverage.lootQuantity ? 'sampled' : 'mean only'} />
+          </div>
+
+          {(r.coverage.meanOnly.length > 0 || r.warnings.length > 0) && (
+            <div style={{padding:'2px 14px 18px'}}>
+              {r.coverage.meanOnly.length > 0 && (
+                <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)',
+                  lineHeight:1.6, marginBottom:8}}>
+                  Riding on its mean, so the spread above is narrower than reality:{' '}
+                  <span style={{color:'var(--text-2)'}}>{r.coverage.meanOnly.join(' · ')}</span>
+                </div>
+              )}
+              {r.warnings.map((w, i) => (
+                <div key={i} style={{fontFamily:'var(--mono)', fontSize:10, lineHeight:1.6,
+                  color: w.severity === 'warning' ? 'var(--amber)' : 'var(--text-4)'}}>
+                  {w.severity === 'warning' ? '⚠ ' : '· '}{w.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =======================================================================
 // TRIP PANE — banking trip / inventory model controls
 // =======================================================================
 function TripPane({input, result, setTrip, setCannon}){
@@ -3755,6 +4022,7 @@ function CombatWorkbench(){
               {k:'compare', label:'Compare', sub:`${E.MONSTERS.length} monsters`, onClick:()=>setTab('compare')},
               {k:'loot',    label:'Loot',    sub:`${fmtK(result.gpPerHour)} gp/hr`, onClick:()=>setTab('loot')},
               {k:'trip',    label:'Trip',    sub:`${result.trip&&isFinite(result.trip.killsPerTrip)?Math.floor(result.trip.killsPerTrip)+' k/trip':'—'}`, onClick:()=>setTab('trip')},
+              {k:'risk',    label:'Risk',    sub:'spread · odds', onClick:()=>setTab('risk')},
               {k:'cannon',  label:'Cannon',  sub: (result.cannon && !result.cannon.idle) ? `${fmtK(result.cannon.ballsPerHour)} balls/hr` : ((input.cannonByMonster||{})[input.monster?.id]?.enabled ? 'idle' : 'off'), onClick:()=>setTab('cannon')},
               {k:'duel',    label:'Duel',    sub:`${(input.duelSetups||[]).length} setups`, onClick:()=>setTab('duel')},
               {k:'planner', label:'Planner', sub:'train order', onClick:()=>setTab('planner')},
@@ -3794,6 +4062,7 @@ function CombatWorkbench(){
           {tab==='loot'         && <LootPane input={simInput} result={result} lootPrefs={lootPrefs} setLootPref={setLootPref} setLootPrefsBulk={setLootPrefsBulk} set={set}/>}
           {tab==='economy'      && <EconomyPane/>}
           {tab==='trip'         && <TripPane input={input} result={result} setTrip={setTrip} setCannon={setCannon}/>}
+          {tab==='risk'         && <RiskPane input={simInput} result={result}/>}
           {tab==='cannon'       && <CannonPane input={input} simInput={simInput} result={result} setCannon={setCannon}/>}
           {tab==='settings'     && <SettingsPane input={simInput} hiddenTiers={hiddenTiers} setHiddenTiers={setHiddenTiers}/>}
         </main>
