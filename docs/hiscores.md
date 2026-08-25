@@ -101,9 +101,17 @@ the message as-is:
 
 ## Not covered: "Sync ALL" in the settings pane
 
-The settings pane still tells you to run `python run_sim.py` before using
-**Sync ALL**, which scrapes every monster's loot table for prices. That file is
-not in the repo and this proxy does not replace it — it proxies hiscores only.
-Prices now come from `sync_prices.py` via LC-bankvalue (see
-[price-sync-spec.md](price-sync-spec.md)), so that button is a leftover from the
-older workflow and the instruction under it is stale.
+**Sync ALL** in the settings pane scrapes every monster's loot table for prices
+through a local `/api/scrape` endpoint. No script in this repo serves that one,
+and this proxy does not either — it proxies hiscores only. Prices now come from
+`sync_prices.py` via LC-bankvalue (see
+[price-sync-spec.md](price-sync-spec.md)), so the button is a leftover from the
+older workflow.
+
+It used to tell you to run `python run_sim.py`, a file that has never been in
+the repo. The text now names the endpoint it actually wants and points at
+`sync_prices.py`, so the button fails honestly instead of sending you after a
+script that does not exist. The button itself is left in place: the per-monster
+CORS sync beside it still works, and reviving the bulk path would mean scraping
+markets.lostcity.rs item by item, which is exactly what LC-bankvalue exists to
+stop.

@@ -3121,9 +3121,15 @@ function PriceAgeBadge({ style }){
 // =======================================================================
 function SettingsPane({input, hiddenTiers = {}, setHiddenTiers}){
   const m = input && input.monster;
-  // The live market scrape (run_sim.py / direct CORS sync) is a local-dev tool.
-  // On a public host (GitHub Pages) it can't reach the server and we don't want
-  // visitors scraping at all — prices are shipped via prices.json instead.
+  // The live market scrape is a local-dev tool. On a public host (GitHub Pages)
+  // it can't reach a server and we don't want visitors scraping at all — prices
+  // are shipped via prices.json instead.
+  //
+  // Note "Sync ALL" below needs /api/scrape, which NO script in this repo
+  // serves: hiscores_proxy.py proxies hiscores only. Prices come from
+  // sync_prices.py via LC-bankvalue now, so the button is a leftover from the
+  // older workflow. It is left in place rather than removed because the
+  // per-monster CORS sync beside it still works.
   const isLocal = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
   const [msg, setMsg] = React.useState('');
@@ -3151,7 +3157,8 @@ function SettingsPane({input, hiddenTiers = {}, setHiddenTiers}){
     } catch(e){ setSyncState('error'); setSyncMsg('error: ' + e.message); }
   };
 
-  // Scrape EVERY monster's loot via the local run_sim.py server (2s/item).
+  // Scrape EVERY monster's loot via a local /api/scrape server (2s/item).
+  // Nothing in this repo serves that endpoint — see the note in SettingsPane.
   const handleSyncAll = async () => {
     setSyncState('syncing');
     setSyncMsg('checking local server…');
@@ -3319,9 +3326,11 @@ function SettingsPane({input, hiddenTiers = {}, setHiddenTiers}){
           )}
         </div>
         <div style={{fontFamily:'var(--mono)', fontSize:10, color:'var(--text-3)', marginTop:6, lineHeight:1.5}}>
-          "Sync ALL" scrapes every monster's loot table once and applies prices everywhere
-          (run <span style={{color:'var(--text-2)'}}>python run_sim.py</span> first, open from
-          localhost:8000). Prices persist across reloads.
+          "Sync ALL" scrapes every monster's loot table through a local
+          <span style={{color:'var(--text-2)'}}> /api/scrape</span> server. No script in this repo
+          serves that — it is a leftover from an older workflow. The supported refresh is
+          <span style={{color:'var(--text-2)'}}> python sync_prices.py</span>, which reads
+          LC-bankvalue instead of hitting the market again. Prices persist across reloads.
         </div>
         {syncState==='error' && (
           <details style={{fontFamily:'var(--mono)', fontSize:11, color:'var(--text-2)'}}>

@@ -567,7 +567,9 @@
     return n;
   }
 
-  // Detect whether the local run_sim.py server is available.
+  // Detect whether a local /api/scrape server is available. Nothing in this
+  // repo serves one — hiscores_proxy.py proxies hiscores only — so this is
+  // expected to report false and say so plainly.
   async function serverAvailable(){
     try {
       const r = await fetch('/api/prices', { method:'GET' });
@@ -581,7 +583,7 @@
     const ok = await serverAvailable();
     if (!ok){
       onProgress && onProgress({ phase:'error',
-        message:'Local server not found. Run "python run_sim.py" and open the simulator from http://localhost:8000.' });
+        message:'No /api/scrape server. Nothing in this repo serves one; refresh prices with "python sync_prices.py" instead.' });
       return { error:'no-server' };
     }
     const items = allLootKeys();
