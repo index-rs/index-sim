@@ -1319,10 +1319,18 @@ function StatsPane({input, result}){
         </>
       )}
 
-      <div className="h-strip"><span className="title">Hit distribution</span><span className="meta">uniform 0..max · including miss</span></div>
-      <div style={{padding:'14px'}}>
-        <HitHistogram maxHit={result.maxHit} hitChance={result.hitChance} />
-      </div>
+      {/* Guarded the way the planner is: Stats is the default pane, so a
+          dist.js that failed to load should cost this section, not the app. */}
+      {window.HitDist && (
+        <>
+          <div className="h-strip"><span className="title">Damage distribution</span>
+            <span className="meta">exact · miss and landed 0 separate{result.specInfo ? ' · spec overlay' : ''}</span>
+          </div>
+          <div style={{padding:'14px'}}>
+            <DamageDistribution result={result} monster={input.monster} />
+          </div>
+        </>
+      )}
 
       <div className="h-strip"><span className="title">XP routing</span><span className="meta">per dmg dealt</span></div>
       <div style={{padding:'10px 14px 14px', display:'flex', gap:8, flexWrap:'wrap'}}>
@@ -4535,22 +4543,202 @@ function Cell({k, v, accent}){
     </div>
   );
 }
-function HitHistogram({maxHit, hitChance}){
-  const bars = [];
-  const missProb = 1 - hitChance;
-  const perFace = hitChance / (maxHit + 1);
-  for (let i = 0; i <= maxHit; i++){
-    bars.push((i === 0 ? missProb : 0) + perFace);
-  }
-  const max = Math.max(...bars, 0.01);
-  return (
-    <div style={{display:'flex', alignItems:'flex-end', gap:3, height:140, paddingBottom:18, position:'relative'}}>
-      {bars.map((p, i) => (
-        <div key={i} style={{flex:1, position:'relative', height:'100%', display:'flex', flexDirection:'column', justifyContent:'flex-end'}}>
-          <div style={{height: `${(p/max)*100}%`, background: i === 0 ? 'var(--red)' : 'var(--teal)', borderRadius:'2px 2px 0 0', opacity:0.85}} />
-          <div style={{position:'absolute', bottom:-16, left:0, right:0, textAlign:'center', fontFamily:'var(--mono)', fontSize:9, color:'var(--text-3)'}}>{i}</div>
+// The exact damage distribution for one attack, from window.HitDist (dist.js).
+//
+// This replaced a chart that drew a flat uniform 0..maxHit with the miss folded
+// into the zero bar. Three things were wrong with that and are fixed here:
+//   • Miss and a landed hit for zero are separate events and get separate bars.
+//   • A decaying boost is a MIXTURE of uniforms of different widths, which is
+//     peaked, not flat — dist.js builds it from the engine's per-sample rolls.
+//   • A multi-hit special is a convolution, so it gets its own patterned series
+//     rather than being invisible here.
+// The y axis is shared between the two series on purpose: a spec spreads its
+// mass over twice the range, so its bars ARE shorter, and rescaling it to fill
+// the chart would hide exactly that.
+function DamageDistribution({result, monster}){
+  const HD = window.HitDist;
+  const { normal, spec } = React.useMemo(() => HD.fromResult(result), [result]);
+  const normalCum = React.useMemo(() => HD.cumulative(normal), [normal]);
+  const specCum   = React.useMemo(() => spec ? HD.cumulative(spec) : null, [spec]);
+  const [showSpec, setShowSpec] = useState(true);
+  const [showTable, setShowTable] = useState(false);
+  const [focus, setFocus] = useState(null);   // null | 'miss' | damage number
+
+  const withSpec = !!spec && showSpec;
+  const domainMax = Math.max(normal.maxHit, withSpec ? spec.maxHit : 0);
+  const cols = domainMax + 2;                 // the miss column, then 0..domainMax
+  const peak = Math.max(
+    ...normal.probabilities, normal.missChance,
+    ...(withSpec ? [...spec.probabilities, spec.missChance] : []),
+    0.001
+  );
+
+  const pp = (p) => p >= 0.0995 ? (p*100).toFixed(1) + '%'
+    : p > 0 ? (p*100).toFixed(2) + '%' : '0%';
+
+  // Readout for whatever column is focused, falling back to the summary.
+  const at = (dist, cum, key) => {
+    if (key === 'miss') return { exact: dist.missChance, cum: null };
+    if (key == null || key > dist.maxHit) return null;
+    return { exact: dist.probabilities[key], cum: cum[key] };
+  };
+  const fN = at(normal, normalCum, focus);
+  const fS = withSpec ? at(spec, specCum, focus) : null;
+
+  // KO reach. Most attacks cannot finish a full-health target, and saying so
+  // plainly is more use than an empty tooltip — `from` is the highest HP this
+  // attack can still kill through, which is just its max hit.
+  const hp = monster && Number.isFinite(monster.hp) ? monster.hp : null;
+  const koNormal = hp != null ? HD.koChance(normal, hp) : null;
+  const koSpec   = hp != null && spec ? HD.koChance(spec, hp) : null;
+
+  const column = (key, label) => {
+    const isMiss = key === 'miss';
+    const nP = isMiss ? normal.missChance : (key <= normal.maxHit ? normal.probabilities[key] : 0);
+    const sP = !withSpec ? 0 : isMiss ? spec.missChance : (key <= spec.maxHit ? spec.probabilities[key] : 0);
+    const active = focus === key;
+    return (
+      <div key={String(key)} tabIndex={0} role="button"
+        aria-label={`${isMiss ? 'Miss' : label + ' damage'}: ${pp(nP)}`}
+        onMouseEnter={()=>setFocus(key)} onFocus={()=>setFocus(key)}
+        onMouseLeave={()=>setFocus(f => f === key ? null : f)}
+        onBlur={()=>setFocus(f => f === key ? null : f)}
+        style={{
+          flex:'1 0 auto', minWidth:13, height:'100%', position:'relative', outline:'none',
+          display:'flex', alignItems:'flex-end', gap:1, padding:'0 1px',
+          background: active ? 'var(--bg-hover)' : 'transparent', cursor:'default'
+        }}>
+        <div title={`${isMiss ? 'Miss' : label} · ${pp(nP)}`}
+          style={{
+            flex:1, height:`${(nP/peak)*100}%`, minHeight: nP > 0 ? 1 : 0,
+            background: isMiss ? 'var(--red)' : 'var(--teal)',
+            borderRadius:'2px 2px 0 0', opacity: active ? 1 : 0.85
+          }} />
+        {withSpec && (
+          // Patterned rather than a second solid colour: the two series answer
+          // different questions (one attack vs one whole special) and should
+          // not read as two halves of one stacked total.
+          <div title={`spec ${isMiss ? 'miss' : label} · ${pp(sP)}`}
+            style={{
+              flex:1, height:`${(sP/peak)*100}%`, minHeight: sP > 0 ? 1 : 0,
+              backgroundImage:`repeating-linear-gradient(135deg, var(--violet) 0 2px, transparent 2px 4px)`,
+              backgroundColor:'rgba(167,139,250,.18)',
+              borderRadius:'2px 2px 0 0', opacity: active ? 1 : 0.9
+            }} />
+        )}
+        <div style={{position:'absolute', bottom:-16, left:0, right:0, textAlign:'center',
+          fontFamily:'var(--mono)', fontSize:9, color: active ? 'var(--text-1)' : 'var(--text-3)'}}>
+          {isMiss ? '✕' : (domainMax > 30 && key % 2 && key !== domainMax ? '' : label)}
         </div>
-      ))}
+      </div>
+    );
+  };
+
+  const marker = (dist, color, label) => (
+    // Expected damage sits between bars, so it is drawn as a line at its true
+    // fractional position rather than snapped to the nearest column.
+    <div key={label} style={{
+      position:'absolute', top:0, bottom:0, left:`${((1 + dist.averageHit + 0.5)/cols)*100}%`,
+      borderLeft:`1px dashed ${color}`, pointerEvents:'none'
+    }}>
+      <span style={{position:'absolute', top:-2, left:3, fontFamily:'var(--mono)', fontSize:9, color, whiteSpace:'nowrap'}}>
+        {label} {dist.averageHit.toFixed(2)}
+      </span>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{display:'flex', gap:14, alignItems:'baseline', flexWrap:'wrap', marginBottom:10,
+        fontFamily:'var(--mono)', fontSize:11, color:'var(--text-2)'}}>
+        <span>expected <b style={{color:'var(--teal)'}}>{normal.averageHit.toFixed(2)}</b></span>
+        <span>on hit <b style={{color:'var(--text-1)'}}>{normal.averageOnHit.toFixed(2)}</b></span>
+        <span>max <b style={{color:'var(--text-1)'}}>{normal.maxHit}</b></span>
+        <span>miss <b style={{color:'var(--red)'}}>{pp(normal.missChance)}</b></span>
+        <span>landed 0 <b style={{color:'var(--text-1)'}}>{pp(normal.probabilities[0])}</b></span>
+        {spec && (
+          <label style={{marginLeft:'auto', display:'flex', gap:6, alignItems:'center', cursor:'pointer', color:'var(--violet)'}}>
+            <input type="checkbox" checked={showSpec} onChange={e=>setShowSpec(e.target.checked)} />
+            {result.specInfo.weapon} spec · {spec.hits}× · exp {spec.averageHit.toFixed(2)}
+          </label>
+        )}
+      </div>
+
+      <div className="scroll" style={{overflowX:'auto', overflowY:'hidden'}}>
+        <div style={{display:'flex', alignItems:'flex-end', height:150, paddingBottom:18,
+          position:'relative', minWidth:'100%'}}>
+          {marker(normal, 'var(--teal)', 'exp')}
+          {withSpec && marker(spec, 'var(--violet)', 'spec')}
+          {column('miss', 'Miss')}
+          {Array.from({length: domainMax + 1}, (_, d) => column(d, String(d)))}
+        </div>
+      </div>
+
+      <div style={{marginTop:10, display:'flex', gap:14, alignItems:'baseline', flexWrap:'wrap',
+        fontFamily:'var(--mono)', fontSize:11, color:'var(--text-3)', minHeight:17}}>
+        {focus == null ? (
+          hp != null ? (
+            <span>
+              from {hp} hp · one attack kills <b style={{color: koNormal > 0 ? 'var(--teal)':'var(--text-4)'}}>{pp(koNormal)}</b>
+              {spec && <> · one spec <b style={{color: koSpec > 0 ? 'var(--violet)':'var(--text-4)'}}>{pp(koSpec)}</b></>}
+              {/* A zero here is a statement about reach, not about luck, so it
+                  says how far each series actually reaches rather than leaving
+                  two zeroes to explain themselves. */}
+              {koNormal === 0 && (!spec || koSpec === 0) && (
+                <> — reaches {normal.maxHit}{spec ? ` on an attack, ${spec.maxHit} on a spec` : ''}</>
+              )}
+            </span>
+          ) : <span>hover a bar for its exact and cumulative chance</span>
+        ) : (
+          <>
+            <span style={{color:'var(--text-1)'}}>{focus === 'miss' ? 'miss' : `${focus} damage`}</span>
+            {fN && <span>normal <b style={{color:'var(--teal)'}}>{pp(fN.exact)}</b>
+              {fN.cum != null && <> · at least <b style={{color:'var(--teal)'}}>{pp(fN.cum)}</b></>}</span>}
+            {fS && <span>spec <b style={{color:'var(--violet)'}}>{pp(fS.exact)}</b>
+              {fS.cum != null && <> · at least <b style={{color:'var(--violet)'}}>{pp(fS.cum)}</b></>}</span>}
+          </>
+        )}
+        <button onClick={()=>setShowTable(v=>!v)} style={{marginLeft:'auto', fontFamily:'var(--mono)', fontSize:10,
+          background:'var(--bg-2)', color:'var(--text-2)', border:'1px solid var(--border-2)',
+          borderRadius:3, padding:'2px 8px', cursor:'pointer'}}>
+          {showTable ? 'hide table' : 'table'}
+        </button>
+      </div>
+
+      {showTable && (
+        // The same numbers as text. The bars are the fast read; this is the one
+        // that can be selected, copied, and read by a screen reader.
+        <div className="scroll" style={{maxHeight:220, overflow:'auto', marginTop:10,
+          border:'1px solid var(--border-2)', borderRadius:3}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'var(--mono)', fontSize:10}}>
+            <thead><tr style={{position:'sticky', top:0, background:'var(--bg-2)', color:'var(--text-3)'}}>
+              <th style={{textAlign:'left', padding:'4px 8px'}}>damage</th>
+              <th style={{textAlign:'right', padding:'4px 8px'}}>chance</th>
+              <th style={{textAlign:'right', padding:'4px 8px'}}>at least</th>
+              {withSpec && <th style={{textAlign:'right', padding:'4px 8px'}}>spec</th>}
+              {withSpec && <th style={{textAlign:'right', padding:'4px 8px'}}>spec at least</th>}
+            </tr></thead>
+            <tbody>
+              <tr style={{borderTop:'1px solid var(--border-1)'}}>
+                <td style={{padding:'3px 8px', color:'var(--red)'}}>miss</td>
+                <td style={{padding:'3px 8px', textAlign:'right'}}>{pp(normal.missChance)}</td>
+                <td style={{padding:'3px 8px', textAlign:'right', color:'var(--text-4)'}}>—</td>
+                {withSpec && <td style={{padding:'3px 8px', textAlign:'right'}}>{pp(spec.missChance)}</td>}
+                {withSpec && <td style={{padding:'3px 8px', textAlign:'right', color:'var(--text-4)'}}>—</td>}
+              </tr>
+              {Array.from({length: domainMax + 1}, (_, d) => (
+                <tr key={d} style={{borderTop:'1px solid var(--border-1)'}}>
+                  <td style={{padding:'3px 8px', color:'var(--text-2)'}}>{d}</td>
+                  <td style={{padding:'3px 8px', textAlign:'right'}}>{d <= normal.maxHit ? pp(normal.probabilities[d]) : '—'}</td>
+                  <td style={{padding:'3px 8px', textAlign:'right', color:'var(--text-3)'}}>{d <= normal.maxHit ? pp(normalCum[d]) : '—'}</td>
+                  {withSpec && <td style={{padding:'3px 8px', textAlign:'right'}}>{d <= spec.maxHit ? pp(spec.probabilities[d]) : '—'}</td>}
+                  {withSpec && <td style={{padding:'3px 8px', textAlign:'right', color:'var(--text-3)'}}>{d <= spec.maxHit ? pp(specCum[d]) : '—'}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

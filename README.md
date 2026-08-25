@@ -70,3 +70,18 @@ node tools/run-risk.js
 
 That checks the Monte Carlo model's averages still land on the simulator's own
 numbers. See [docs/risk.md](docs/risk.md).
+
+## Damage distribution
+
+The **Stats** tab ends with the exact distribution of a single attack, not a
+uniform sketch of it: miss and a landed zero are separate bars, a decaying
+potion is drawn as the mixture of different-width uniforms it really is, and a
+multi-hit special appears as its own convolved series.
+
+```bash
+node tools/run-dist.js
+```
+
+That asserts the model's mean equals the engine's own `avgHit` and
+`expPerSpec` to floating point — it is layered on the simulator, never a second
+opinion about it. See [docs/damage-distribution.md](docs/damage-distribution.md).

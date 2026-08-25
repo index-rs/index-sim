@@ -726,7 +726,16 @@
     }
     const monDefBonus = m[monDefField] ?? 0;
     const monDefRoll = (monDefLvl + 9) * (monDefBonus + 64);
+    // hitRolls: the individual (accuracy, max hit) pairs this attack is drawn
+    // from, BEFORE they are averaged into hc/avgHit below. One entry for a
+    // static setup; one per decay sample for a fluid one. dist.js turns them
+    // into an exact damage distribution — a fluid setup is a MIXTURE of
+    // uniforms with different widths, which the mean pair cannot represent
+    // (a decaying super-set is not the same shape as a flat 0..meanMax).
+    // Nothing in the engine reads it; summarize() in tools/golden-lib.js is a
+    // whitelist, so adding it does not move the golden baseline.
     let hc, avgHit;
+    const hitRolls = [];
     if (offSamples && offSamples.length > 1){
       // Fluid: average expected damage over the decay samples, each using its own
       // integer max hit + accuracy roll (NOT a single mean level).
@@ -735,12 +744,14 @@
         const ar = roll(o.effAcc, accBonusEff);
         const h = hitChance(ar, monDefRoll);
         sumHc += h; sumAvg += (o.mh / 2) * h;
+        hitRolls.push({ hitChance: h, maxHit: o.mh });
       }
       hc = sumHc / offSamples.length;
       avgHit = sumAvg / offSamples.length;
     } else {
       hc = hitChance(attRoll, monDefRoll);
       avgHit = (mh / 2) * hc;
+      hitRolls.push({ hitChance: hc, maxHit: mh });
     }
 
     // attack speed — ranged 'rapid' shaves a tick
@@ -1386,7 +1397,7 @@
     return {
       combatType: input.combatType,
       effAcc, effDmg, maxHit: mh, peakMaxHit: offSamples ? offSamples[0].mh : mh,
-      attRoll, defRoll: monDefRoll, hitChance: hc, avgHit,
+      attRoll, defRoll: monDefRoll, hitChance: hc, avgHit, hitRolls,
       attackSpeedSec: speedSec, attackTicks: ticks,
       dps, effDps, specInfo, ttkSec: ttkEff, cycleSec: cycle, overheadSec: overhead, killsPerHour: kph,
       // Weapon poison (null when no poisoned weapon): per-hit damage + interval +
