@@ -32,3 +32,15 @@ context, the same way the browser does.
 
 See [docs/droptable-audit.md](docs/droptable-audit.md) and
 [docs/npc-stat-audit.md](docs/npc-stat-audit.md).
+
+## Golden tests
+
+20 scenarios run through the simulator and compared against a recorded
+baseline, so a refactor that moves gp/hr or kills/hr numbers fails loudly:
+
+```bash
+node tools/run-golden.js
+```
+
+Exit code is 1 on any mismatch. When a change is deliberate, re-record with
+`--update`. See [docs/golden-tests.md](docs/golden-tests.md).

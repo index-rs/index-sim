@@ -1,0 +1,3270 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-25",
+  "source": {
+    "scripts": [
+      "gamedata.js",
+      "engine.js",
+      "trip.js",
+      "equipment.js"
+    ],
+    "entrypoint": "SimEngine.simulate() via Node vm context",
+    "excludedScripts": [
+      "market.js",
+      "planner-core.js",
+      "views.jsx",
+      "planner.jsx"
+    ],
+    "priceSource": "gamedata.js embedded ITEM_PRICES and ALCH_VALUES; no market sync or localStorage state"
+  },
+  "tolerances": {
+    "defaultNumericAbs": 0.000001,
+    "note": "Summaries are rounded to 6 decimals before comparison; tolerance exists for floating point drift."
+  },
+  "cases": [
+    {
+      "id": "melee_rune_scimitar_hill_giant_super_prayers",
+      "description": "Melee training with rune scimitar, sustained super potions, offensive prayers, bones and trip costs.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "giant",
+        "weapon": "rune_scimitar",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 60,
+          "strength": 60,
+          "defence": 50,
+          "ranged": 50,
+          "magic": 50,
+          "prayer": 43
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str"
+        ],
+        "sustained": true,
+        "repotThreshold": 65,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 90,
+          "prayerMode": "potions",
+          "prayerPotionSets": 1
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 16.444444,
+        "peakMaxHit": 17,
+        "hitChance": 0.889116,
+        "avgHit": 7.311276,
+        "dps": 3.046365,
+        "effDps": 3.046365,
+        "ttkSec": 12.838616,
+        "cycleSec": 15.338616,
+        "killsPerHour": 234.701749,
+        "effectiveKph": 154.094394,
+        "xpPerHour": 32858.244868,
+        "effectiveXpPerHour": 21573.215148,
+        "totalXpPerHour": 31057.725094,
+        "gpPerKill": 478.978046,
+        "gpPerHour": 112416.98505,
+        "netGpPerHour": -166227.068256,
+        "effectiveNetGpPerHour": -109137.061986,
+        "supplyCostPerKill": 1187.226147,
+        "foodCostPerKill": 4.445454,
+        "potionCostPerKill": 1182.780693,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 15,
+        "prayerPerKill": 9.895881,
+        "ammo": null,
+        "trip": {
+          "bound": "prayer",
+          "killsPerTrip": 11.216788,
+          "foodPerKill": 0.019846,
+          "lootFraction": 1,
+          "efficiency": 0.656554,
+          "effectiveKph": 154.094394,
+          "bankSeconds": 90,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 0.493793,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 11,
+            "foodCount": 2,
+            "lootCapacity": 16,
+            "nonStackPerKill": 0.1797
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Limpwurt root",
+            "key": "limpwurt_root",
+            "pref": "loot",
+            "evGp": 214.85,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 109.038188,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 63.672448,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Nature rune ×6",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 32.91678,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Law rune ×2",
+            "key": "lawrune",
+            "pref": "loot",
+            "evGp": 14.48592,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 21573.215148
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 7173.094037
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 2311.415909
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_green_dragon_antifire_ring_of_wealth",
+      "description": "Valuable dragon loot, antifire trip settings, anti-dragon shield and Ring of Wealth jewel table.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "green_dragon",
+        "weapon": "dragon_longsword",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 75,
+          "strength": 75,
+          "defence": 70,
+          "ranged": 60,
+          "magic": 60,
+          "prayer": 52
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str",
+          "super_def"
+        ],
+        "sustained": true,
+        "repotThreshold": 78,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 240,
+          "antifire": true,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": true,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 24.153846,
+        "peakMaxHit": 26,
+        "hitChance": 0.733622,
+        "avgHit": 8.864786,
+        "dps": 2.954929,
+        "effDps": 2.954929,
+        "ttkSec": 27.424845,
+        "cycleSec": 31.424845,
+        "killsPerHour": 114.559036,
+        "effectiveKph": 64.158975,
+        "xpPerHour": 34367.710773,
+        "effectiveXpPerHour": 19247.692424,
+        "totalXpPerHour": 25647.550155,
+        "gpPerKill": 6073.282765,
+        "gpPerHour": 695749.418319,
+        "netGpPerHour": 542438.187159,
+        "effectiveNetGpPerHour": 303793.390679,
+        "supplyCostPerKill": 1338.272708,
+        "foodCostPerKill": 97.092419,
+        "potionCostPerKill": 1241.180288,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 19.045361,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 9.722198,
+          "foodPerKill": 0.433448,
+          "lootFraction": 1,
+          "efficiency": 0.560052,
+          "effectiveKph": 64.158975,
+          "bankSeconds": 240,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 5.725127,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 5,
+            "foodCount": 5,
+            "lootCapacity": 22,
+            "nonStackPerKill": 2.16406
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Green dragonhide",
+            "key": "dragonhide_green",
+            "pref": "loot",
+            "evGp": 2700,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Dragon bones",
+            "key": "dragon_bones",
+            "pref": "loot",
+            "evGp": 2504,
+            "prayerXp": 72,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 235.080732,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 233.647562,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Nature rune ×15",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 205.6509,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 19247.692424
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 6399.857731
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_dragon_dagger_poison_lesser_demon_spec",
+      "description": "Poisoned dragon dagger mainhand with its own DPS special against a demon.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "lesser_demon",
+        "weapon": "dragon_dagger_p",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 70,
+          "strength": 70,
+          "defence": 60,
+          "ranged": 50,
+          "magic": 50,
+          "prayer": 43
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str"
+        ],
+        "sustained": true,
+        "repotThreshold": 72,
+        "trip": {
+          "foodKey": "swordfish",
+          "teleport": true,
+          "bankSeconds": 120,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "dragon_dagger_p",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 17.769231,
+        "peakMaxHit": 19,
+        "hitChance": 0.771243,
+        "avgHit": 6.856439,
+        "dps": 2.856849,
+        "effDps": 2.971132,
+        "ttkSec": 26.129988,
+        "cycleSec": 29.629988,
+        "killsPerHour": 121.498532,
+        "effectiveKph": 115.065158,
+        "xpPerHour": 35721.769635,
+        "effectiveXpPerHour": 33830.293931,
+        "totalXpPerHour": 45078.866663,
+        "gpPerKill": 422.89559,
+        "gpPerHour": 51381.193408,
+        "netGpPerHour": 28037.913479,
+        "effectiveNetGpPerHour": 26553.29968,
+        "supplyCostPerKill": 192.128082,
+        "foodCostPerKill": 105.610392,
+        "potionCostPerKill": 86.51769,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 17.957568,
+        "ammo": null,
+        "trip": {
+          "bound": "food",
+          "killsPerTrip": 72.436053,
+          "foodPerKill": 0.345132,
+          "lootFraction": 1,
+          "efficiency": 0.94705,
+          "effectiveKph": 115.065158,
+          "bankSeconds": 120,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 5.325681,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 4,
+            "foodCount": 25,
+            "lootCapacity": 23,
+            "nonStackPerKill": 0.07812
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": {
+          "key": "dragon_dagger_p",
+          "maxHit": 20,
+          "hitChance": 0.771382,
+          "expPerSpec": 15.427638,
+          "specsPerHour": 48,
+          "dpsGainPct": 4.000304
+        },
+        "poison": {
+          "severity": 20,
+          "dps": 0.222222,
+          "directFrac": 0.930411
+        },
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Rune med helm",
+            "key": "rune_med_helm",
+            "pref": "loot",
+            "evGp": 95.6725,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 11520
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 84.887543,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Chaos rune ×12",
+            "key": "chaosrune",
+            "pref": "loot",
+            "evGp": 62.33976,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Fire rune ×60",
+            "key": "firerune",
+            "pref": "loot",
+            "evGp": 52.5,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 37.5,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 33830.293931
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 11248.572732
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_dba_sustained_moss_giant",
+      "description": "Dragon battleaxe boost mode with restore handling and sustained-level averaging.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "mossgiant",
+        "weapon": "rune_scimitar",
+        "ammo": null,
+        "spell": null,
+        "style": "controlled",
+        "levels": {
+          "attack": 65,
+          "strength": 68,
+          "defence": 55,
+          "ranged": 45,
+          "magic": 45,
+          "prayer": 43
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "dba_spec",
+          "super_att"
+        ],
+        "sustained": true,
+        "repotThreshold": 70,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 110,
+          "dbaRestore": true,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 17.777778,
+        "peakMaxHit": 19,
+        "hitChance": 0.828506,
+        "avgHit": 7.36605,
+        "dps": 3.069188,
+        "effDps": 3.069188,
+        "ttkSec": 20.997232,
+        "cycleSec": 23.497232,
+        "killsPerHour": 153.209536,
+        "effectiveKph": 142.806604,
+        "xpPerHour": 36770.288528,
+        "effectiveXpPerHour": 34273.584862,
+        "totalXpPerHour": 47811.650883,
+        "gpPerKill": 418.724568,
+        "gpPerHour": 64152.596538,
+        "netGpPerHour": 55881.752664,
+        "effectiveNetGpPerHour": 52087.380025,
+        "supplyCostPerKill": 53.983871,
+        "foodCostPerKill": 28.308577,
+        "potionCostPerKill": 25.675294,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 15,
+        "prayerPerKill": 15.159505,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 64.264112,
+          "foodPerKill": 0.126378,
+          "lootFraction": 1,
+          "efficiency": 0.9321,
+          "effectiveKph": 142.806604,
+          "bankSeconds": 110,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 1.908151,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 3,
+            "stackReserve": 11,
+            "foodCount": 9,
+            "lootCapacity": 14,
+            "nonStackPerKill": 0.20313
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 84.887543,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 77.875875,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Steel bar",
+            "key": "steel_bar",
+            "pref": "loot",
+            "evGp": 68.9136,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Nature rune ×6",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 49.36464,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Law rune ×3",
+            "key": "lawrune",
+            "pref": "loot",
+            "evGp": 28.96875,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "att",
+            "name": "Attack",
+            "xpPerHour": 11424.528287
+          },
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 11424.528287
+          },
+          {
+            "key": "def",
+            "name": "Defence",
+            "xpPerHour": 11424.528287
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 11395.966967
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 2142.099054
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_dragon_halberd_rock_crab_small_target_spec",
+      "description": "Dragon halberd safespot and special-attack behavior on a small target; intentionally preserves legacy double-hit model.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "rock_crab",
+        "weapon": "dragon_halberd",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 70,
+          "strength": 70,
+          "defence": 60,
+          "ranged": 50,
+          "magic": 50,
+          "prayer": 43
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "none",
+          "teleport": false,
+          "bankSeconds": 0
+        },
+        "ringOfWealth": false,
+        "specWeapon": "dragon_halberd",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 24,
+        "peakMaxHit": 24,
+        "hitChance": 0.979578,
+        "avgHit": 11.754931,
+        "dps": 2.798793,
+        "effDps": 2.951172,
+        "ttkSec": 18.975514,
+        "cycleSec": 19.975514,
+        "killsPerHour": 180.220646,
+        "effectiveKph": 180.220646,
+        "xpPerHour": 36044.129273,
+        "effectiveXpPerHour": 36044.129273,
+        "totalXpPerHour": 48028.802257,
+        "gpPerKill": 63.892885,
+        "gpPerHour": 11514.816975,
+        "netGpPerHour": 9553.76964,
+        "effectiveNetGpPerHour": 9553.76964,
+        "supplyCostPerKill": 10.881369,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 10.881369,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 575.938567,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 1,
+          "effectiveKph": 180.220646,
+          "bankSeconds": 0,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 0,
+            "stackReserve": 1,
+            "foodCount": 0,
+            "lootCapacity": 27,
+            "nonStackPerKill": 0.04688
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": {
+          "key": "dragon_halberd",
+          "maxHit": 26,
+          "hitChance": 0.979578,
+          "expPerSpec": 25.469016,
+          "specsPerHour": 40,
+          "dpsGainPct": 5.444444
+        },
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Casket (opened)",
+            "key": "casket",
+            "pref": "loot",
+            "evGp": 22.57871,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 21.215095,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coal ×2",
+            "key": "coal",
+            "pref": "loot",
+            "evGp": 16.5678,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 2.25,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 0.90624,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 36044.129273
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 11984.672983
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_ring_recoil_fire_giant_food_trip",
+      "description": "No-safespot melee trip with incoming damage, food use and ring-of-recoil supply cost.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "firegiant",
+        "weapon": "rune_scimitar",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 72,
+          "strength": 72,
+          "defence": 60,
+          "ranged": 50,
+          "magic": 50,
+          "prayer": 43
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str",
+          "super_def"
+        ],
+        "sustained": true,
+        "repotThreshold": 74,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 210,
+          "recoilRings": 3,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 18.846154,
+        "peakMaxHit": 20,
+        "hitChance": 0.78546,
+        "avgHit": 7.404751,
+        "dps": 3.085313,
+        "effDps": 3.085313,
+        "ttkSec": 36.447181,
+        "cycleSec": 38.947181,
+        "killsPerHour": 92.432878,
+        "effectiveKph": 75.576108,
+        "xpPerHour": 39883.743801,
+        "effectiveXpPerHour": 32610.237671,
+        "totalXpPerHour": 44586.783316,
+        "gpPerKill": 1618.759887,
+        "gpPerHour": 149626.635445,
+        "netGpPerHour": 89401.656456,
+        "effectiveNetGpPerHour": 73097.683101,
+        "supplyCostPerKill": 651.553648,
+        "foodCostPerKill": 203.853078,
+        "potionCostPerKill": 325.428605,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 15,
+        "prayerPerKill": 25.127213,
+        "ammo": null,
+        "trip": {
+          "bound": "food",
+          "killsPerTrip": 24.174273,
+          "foodPerKill": 0.910058,
+          "lootFraction": 1,
+          "efficiency": 0.817632,
+          "effectiveKph": 75.576108,
+          "bankSeconds": 210,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 11.56982,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 6,
+            "foodCount": 22,
+            "lootCapacity": 21,
+            "nonStackPerKill": 0.28907
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": {
+          "dps": 0.089461,
+          "dmgPerKill": 3.260586,
+          "ringsPerKill": 0.081515,
+          "costPerKill": 122.271965
+        },
+        "topLoot": [
+          {
+            "name": "Ultra-rare drop table",
+            "key": null,
+            "pref": "loot",
+            "evGp": 313.443224,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 295.95225,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 233.447533,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Fire rune ×150",
+            "key": "firerune",
+            "pref": "loot",
+            "evGp": 164.073,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Rune arrow ×12",
+            "key": "rune_arrow",
+            "pref": "loot",
+            "evGp": 141.08472,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 32610.237671
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 10842.904026
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 1133.641619
+          }
+        ]
+      }
+    },
+    {
+      "id": "ranged_magic_shortbow_dagannoth_cannon",
+      "description": "Ranged bow training with cannon overlay, prayer-free trip reserve and cannonball supply accounting.",
+      "input": {
+        "combatType": "ranged",
+        "monsterId": "dagannoth",
+        "weapon": "magic_shortbow",
+        "ammo": "rune_arrow",
+        "spell": null,
+        "style": "rapid",
+        "levels": {
+          "attack": 60,
+          "strength": 60,
+          "defence": 60,
+          "ranged": 78,
+          "magic": 55,
+          "prayer": 43
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "ranging"
+        ],
+        "sustained": true,
+        "repotThreshold": 80,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 150,
+          "recoverAmmo": true
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": {
+          "enabled": true,
+          "targets": 6,
+          "respawnSec": 30
+        },
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "ranged",
+        "maxHit": 16.444444,
+        "peakMaxHit": 17,
+        "hitChance": 0.921821,
+        "avgHit": 7.579879,
+        "dps": 4.211044,
+        "effDps": 4.211044,
+        "ttkSec": 7.468269,
+        "cycleSec": 9.968269,
+        "killsPerHour": 361.145936,
+        "effectiveKph": 354.20801,
+        "xpPerHour": 45431.016357,
+        "effectiveXpPerHour": 44558.247235,
+        "totalXpPerHour": 101307.10228,
+        "gpPerKill": 82.570555,
+        "gpPerHour": 29820.020253,
+        "netGpPerHour": -263441.885422,
+        "effectiveNetGpPerHour": -258380.938927,
+        "supplyCostPerKill": 812.031582,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 6.898833,
+        "ammoCostPerKill": 249.772123,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 0,
+        "ammo": {
+          "key": "rune_arrow",
+          "unitPrice": 301,
+          "perKill": 0.829808,
+          "costPerKill": 249.772123
+        },
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 768.245839,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.980789,
+          "effectiveKph": 354.20801,
+          "bankSeconds": 150,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 6,
+            "stackReserve": 4,
+            "foodCount": 0,
+            "lootCapacity": 18,
+            "nonStackPerKill": 0.02343
+          }
+        },
+        "cannon": {
+          "ballsPerKill": 3.085337,
+          "ballsPerHour": 1487.253854,
+          "cannonDps": 5.712421,
+          "ballCostPerKill": 555.360626,
+          "activeFrac": 1,
+          "idle": false,
+          "respawnBound": false
+        },
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Casket (opened)",
+            "key": "casket",
+            "pref": "loot",
+            "evGp": 22.57871,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 21.215095,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 12.68736,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Water rune ×15",
+            "key": "waterrune",
+            "pref": "loot",
+            "evGp": 7.96875,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Steel arrow ×15",
+            "key": "steel_arrow",
+            "pref": "loot",
+            "evGp": 6.79905,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "rng",
+            "name": "Ranged",
+            "xpPerHour": 44558.247235
+          },
+          {
+            "key": "rngcannon",
+            "name": "Ranged (cannon)",
+            "xpPerHour": 40339.301793
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 14815.617206
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 1593.936046
+          }
+        ]
+      }
+    },
+    {
+      "id": "ranged_magic_shortbow_rock_crab_safespot",
+      "description": "Ranged safespot baseline with low-value loot and automatic zero incoming damage.",
+      "input": {
+        "combatType": "ranged",
+        "monsterId": "rock_crab",
+        "weapon": "magic_shortbow",
+        "ammo": "mith_arrow",
+        "spell": null,
+        "style": "rapid",
+        "levels": {
+          "attack": 40,
+          "strength": 40,
+          "defence": 40,
+          "ranged": 60,
+          "magic": 40,
+          "prayer": 31
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "none"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "none",
+          "teleport": false,
+          "bankSeconds": 0,
+          "recoverAmmo": true
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "ranged",
+        "maxHit": 9,
+        "peakMaxHit": 9,
+        "hitChance": 0.979741,
+        "avgHit": 4.408836,
+        "dps": 2.449353,
+        "effDps": 2.449353,
+        "ttkSec": 21.332163,
+        "cycleSec": 22.332163,
+        "killsPerHour": 161.202477,
+        "effectiveKph": 161.202477,
+        "xpPerHour": 32240.495321,
+        "effectiveXpPerHour": 32240.495321,
+        "totalXpPerHour": 42960.460015,
+        "gpPerKill": 63.892885,
+        "gpPerHour": 10299.691247,
+        "netGpPerHour": -16064.423099,
+        "effectiveNetGpPerHour": -16064.423099,
+        "supplyCostPerKill": 163.546584,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 0,
+        "ammoCostPerKill": 163.546584,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 0,
+        "ammo": {
+          "key": "mith_arrow",
+          "unitPrice": 69,
+          "perKill": 2.37024,
+          "costPerKill": 163.546584
+        },
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 575.938567,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 1,
+          "effectiveKph": 161.202477,
+          "bankSeconds": 0,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 0,
+            "stackReserve": 1,
+            "foodCount": 0,
+            "lootCapacity": 27,
+            "nonStackPerKill": 0.04688
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Casket (opened)",
+            "key": "casket",
+            "pref": "loot",
+            "evGp": 22.57871,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 21.215095,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coal ×2",
+            "key": "coal",
+            "pref": "loot",
+            "evGp": 16.5678,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 2.25,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 0.90624,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "rng",
+            "name": "Ranged",
+            "xpPerHour": 32240.495321
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 10719.964694
+          }
+        ]
+      }
+    },
+    {
+      "id": "ranged_steel_knives_chaos_druid_inventory",
+      "description": "Thrown-weapon ranged case over herb drops and non-stackable inventory pressure.",
+      "input": {
+        "combatType": "ranged",
+        "monsterId": "chaos_druid",
+        "weapon": "steel_knife_w",
+        "ammo": "none",
+        "spell": null,
+        "style": "rapid",
+        "levels": {
+          "attack": 30,
+          "strength": 30,
+          "defence": 40,
+          "ranged": 50,
+          "magic": 35,
+          "prayer": 31
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "none"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "trout",
+          "teleport": true,
+          "bankSeconds": 90,
+          "recoverAmmo": false
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": {
+          "Herb": "value"
+        }
+      },
+      "expected": {
+        "combatType": "ranged",
+        "maxHit": 6,
+        "peakMaxHit": 6,
+        "hitChance": 0.926101,
+        "avgHit": 2.778302,
+        "dps": 2.315252,
+        "effDps": 2.315252,
+        "ttkSec": 9.286246,
+        "cycleSec": 11.286246,
+        "killsPerHour": 318.97231,
+        "effectiveKph": 269.451475,
+        "xpPerHour": 25517.784767,
+        "effectiveXpPerHour": 21556.117974,
+        "totalXpPerHour": 29936.058836,
+        "gpPerKill": 993.783765,
+        "gpPerHour": 316989.502655,
+        "netGpPerHour": -408714.065644,
+        "effectiveNetGpPerHour": -345260.715099,
+        "supplyCostPerKill": 2275.130306,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 0,
+        "ammoCostPerKill": 2275.130306,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 0,
+        "ammo": {
+          "key": "steel_knife",
+          "unitPrice": 294,
+          "perKill": 7.738538,
+          "costPerKill": 2275.130306
+        },
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 43.389595,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.844749,
+          "effectiveKph": 269.451475,
+          "bankSeconds": 90,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 7,
+            "foodCount": 0,
+            "lootCapacity": 20,
+            "nonStackPerKill": 0.46094
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 545.171,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 342.68575,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Law rune ×2",
+            "key": "lawrune",
+            "pref": "loot",
+            "evGp": 33.79842,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Air rune ×36",
+            "key": "airrune",
+            "pref": "loot",
+            "evGp": 25.3152,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 21.215095,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "rng",
+            "name": "Ranged",
+            "xpPerHour": 21556.117974
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 7167.409226
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 1212.531636
+          }
+        ]
+      }
+    },
+    {
+      "id": "ranged_yew_longbow_black_demon_no_recovery",
+      "description": "Slow bow, high-defence target and explicit no-ammo-recovery cost path.",
+      "input": {
+        "combatType": "ranged",
+        "monsterId": "black_demon",
+        "weapon": "yew_longbow",
+        "ammo": "addy_arrow",
+        "spell": null,
+        "style": "longrange",
+        "levels": {
+          "attack": 60,
+          "strength": 60,
+          "defence": 70,
+          "ranged": 75,
+          "magic": 50,
+          "prayer": 43
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "ranging"
+        ],
+        "sustained": true,
+        "repotThreshold": 78,
+        "trip": {
+          "foodKey": "none",
+          "teleport": true,
+          "bankSeconds": 160,
+          "recoverAmmo": false
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "ranged",
+        "maxHit": 13.5,
+        "peakMaxHit": 14,
+        "hitChance": 0.741032,
+        "avgHit": 5.003399,
+        "dps": 1.389833,
+        "effDps": 1.389833,
+        "ttkSec": 115.391558,
+        "cycleSec": 118.891558,
+        "killsPerHour": 30.279694,
+        "effectiveKph": 29.758255,
+        "xpPerHour": 19015.647811,
+        "effectiveXpPerHour": 18688.184282,
+        "totalXpPerHour": 24902.005555,
+        "gpPerKill": 1664.524569,
+        "gpPerHour": 50401.294546,
+        "netGpPerHour": -29333.175128,
+        "effectiveNetGpPerHour": -28828.036141,
+        "supplyCostPerKill": 2633.265374,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 69.008524,
+        "ammoCostPerKill": 2564.256851,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 0,
+        "ammo": {
+          "key": "addy_arrow",
+          "unitPrice": 80,
+          "perKill": 32.053211,
+          "costPerKill": 2564.256851
+        },
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 76.802107,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.982779,
+          "effectiveKph": 29.758255,
+          "bankSeconds": 160,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 6,
+            "foodCount": 0,
+            "lootCapacity": 21,
+            "nonStackPerKill": 0.27343
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 358.256937,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Ultra-rare drop table",
+            "key": null,
+            "pref": "loot",
+            "evGp": 313.443224,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Rune chainbody",
+            "key": "rune_chainbody",
+            "pref": "loot",
+            "evGp": 300.8412,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 30000
+          },
+          {
+            "name": "Blood rune ×7",
+            "key": "bloodrune",
+            "pref": "loot",
+            "evGp": 169.53125,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 106.102637,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "def",
+            "name": "Defence",
+            "xpPerHour": 9344.092141
+          },
+          {
+            "key": "rng",
+            "name": "Ranged",
+            "xpPerHour": 9344.092141
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 6213.821274
+          }
+        ]
+      }
+    },
+    {
+      "id": "ranged_magic_shortbow_greater_demon_spec",
+      "description": "Magic shortbow special attack with bow ammo and demon loot.",
+      "input": {
+        "combatType": "ranged",
+        "monsterId": "greater_demon",
+        "weapon": "magic_shortbow",
+        "ammo": "rune_arrow",
+        "spell": null,
+        "style": "rapid",
+        "levels": {
+          "attack": 60,
+          "strength": 60,
+          "defence": 65,
+          "ranged": 82,
+          "magic": 55,
+          "prayer": 43
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "ranging"
+        ],
+        "sustained": true,
+        "repotThreshold": 84,
+        "trip": {
+          "foodKey": "none",
+          "teleport": true,
+          "bankSeconds": 130,
+          "recoverAmmo": true
+        },
+        "ringOfWealth": false,
+        "specWeapon": "magic_shortbow",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "ranged",
+        "maxHit": 17.2,
+        "peakMaxHit": 18,
+        "hitChance": 0.886257,
+        "avgHit": 7.622683,
+        "dps": 4.234824,
+        "effDps": 4.304585,
+        "ttkSec": 21.209942,
+        "cycleSec": 24.709942,
+        "killsPerHour": 145.690347,
+        "effectiveKph": 142.134512,
+        "xpPerHour": 50700.240621,
+        "effectiveXpPerHour": 49462.810193,
+        "totalXpPerHour": 65909.194582,
+        "gpPerKill": 603.570937,
+        "gpPerHour": 87934.459075,
+        "netGpPerHour": -19083.459593,
+        "effectiveNetGpPerHour": -18617.693489,
+        "supplyCostPerKill": 734.557376,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 25.202652,
+        "ammoCostPerKill": 709.354724,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 0,
+        "ammo": {
+          "key": "rune_arrow",
+          "unitPrice": 301,
+          "perKill": 2.35666,
+          "costPerKill": 709.354724
+        },
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 210.295328,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.975593,
+          "effectiveKph": 142.134512,
+          "bankSeconds": 130,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 4,
+            "foodCount": 0,
+            "lootCapacity": 23,
+            "nonStackPerKill": 0.10937
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": {
+          "key": "magic_shortbow",
+          "maxHit": 19,
+          "hitChance": 0.920448,
+          "expPerSpec": 17.488511,
+          "specsPerHour": 34.285714,
+          "dpsGainPct": 1.647324
+        },
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Rune full helm",
+            "key": "rune_full_helm",
+            "pref": "loot",
+            "evGp": 237.424,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 21120
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 106.102637,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Fire rune ×75",
+            "key": "firerune",
+            "pref": "loot",
+            "evGp": 65.625,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Chaos rune ×15",
+            "key": "chaosrune",
+            "pref": "loot",
+            "evGp": 46.7628,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 41.25,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "rng",
+            "name": "Ranged",
+            "xpPerHour": 49462.810193
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 16446.384389
+          }
+        ]
+      }
+    },
+    {
+      "id": "magic_fire_bolt_chaos_druid_alch",
+      "description": "Magic bolt spell, chaos gauntlet max-hit bonus, in-trip high-alch reserve and herb loot.",
+      "input": {
+        "combatType": "magic",
+        "monsterId": "chaos_druid",
+        "weapon": "staff_of_fire",
+        "ammo": null,
+        "spell": "fire_bolt",
+        "style": "accurate",
+        "levels": {
+          "attack": 30,
+          "strength": 30,
+          "defence": 45,
+          "ranged": 30,
+          "magic": 59,
+          "prayer": 43
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "magic",
+          "chaos_gauntlets"
+        ],
+        "sustained": true,
+        "repotThreshold": 60,
+        "trip": {
+          "foodKey": "none",
+          "teleport": true,
+          "bankSeconds": 90,
+          "alching": true,
+          "runeSlots": 2
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "magic",
+        "maxHit": 15,
+        "peakMaxHit": 15,
+        "hitChance": 0.930263,
+        "avgHit": 6.976975,
+        "dps": 2.325658,
+        "effDps": 2.325658,
+        "ttkSec": 10.212163,
+        "cycleSec": 12.212163,
+        "killsPerHour": 294.788079,
+        "effectiveKph": 247.987465,
+        "xpPerHour": 30804.726369,
+        "effectiveXpPerHour": 25914.161926,
+        "totalXpPerHour": 33626.572094,
+        "gpPerKill": 993.783765,
+        "gpPerHour": 292955.606796,
+        "netGpPerHour": 35210.863586,
+        "effectiveNetGpPerHour": 29620.779928,
+        "supplyCostPerKill": 874.339099,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 115.235,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 759.104099,
+        "castsPerKill": 3.404054,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 39.050636,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.84124,
+          "effectiveKph": 247.987465,
+          "bankSeconds": 90,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 4,
+            "stackReserve": 6,
+            "foodCount": 0,
+            "lootCapacity": 18,
+            "nonStackPerKill": 0.46094
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 545.171,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 342.68575,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Law rune ×2",
+            "key": "lawrune",
+            "pref": "loot",
+            "evGp": 33.79842,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Air rune ×36",
+            "key": "airrune",
+            "pref": "loot",
+            "evGp": 25.3152,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 21.215095,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "mag",
+            "name": "Magic",
+            "xpPerHour": 25914.161926
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 6596.466575
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 1115.943594
+          }
+        ]
+      }
+    },
+    {
+      "id": "magic_fire_wave_blue_dragon_safespot",
+      "description": "High spell tier against dragon loot with magic safespot auto-enabled.",
+      "input": {
+        "combatType": "magic",
+        "monsterId": "blue_dragon",
+        "weapon": "staff_of_fire",
+        "ammo": null,
+        "spell": "fire_wave",
+        "style": "accurate",
+        "levels": {
+          "attack": 40,
+          "strength": 40,
+          "defence": 60,
+          "ranged": 50,
+          "magic": 80,
+          "prayer": 52
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "magic"
+        ],
+        "sustained": true,
+        "repotThreshold": 82,
+        "trip": {
+          "foodKey": "none",
+          "teleport": true,
+          "bankSeconds": 270,
+          "runeSlots": 2
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "magic",
+        "maxHit": 20,
+        "peakMaxHit": 20,
+        "hitChance": 0.945862,
+        "avgHit": 9.458619,
+        "dps": 3.152873,
+        "effDps": 3.152873,
+        "ttkSec": 34.888814,
+        "cycleSec": 38.888814,
+        "killsPerHour": 92.571607,
+        "effectiveKph": 52.860623,
+        "xpPerHour": 63114.573212,
+        "effectiveXpPerHour": 36039.945553,
+        "totalXpPerHour": 43421.931559,
+        "gpPerKill": 6204.85137,
+        "gpPerHour": 574393.060069,
+        "netGpPerHour": -466509.656756,
+        "effectiveNetGpPerHour": -266388.280456,
+        "supplyCostPerKill": 11244.297847,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 486.9135,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 10757.384347,
+        "castsPerKill": 11.629605,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 9.241888,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.571024,
+          "effectiveKph": 52.860623,
+          "bankSeconds": 270,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 3,
+            "stackReserve": 5,
+            "foodCount": 0,
+            "lootCapacity": 20,
+            "nonStackPerKill": 2.16406
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Blue dragonhide",
+            "key": "dragonhide_blue",
+            "pref": "loot",
+            "evGp": 2960,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Dragon bones",
+            "key": "dragon_bones",
+            "pref": "loot",
+            "evGp": 2504,
+            "prayerXp": 72,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 233.647562,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Nature rune ×15",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 205.6509,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 106.102637,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "mag",
+            "name": "Magic",
+            "xpPerHour": 36039.945553
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 7381.986005
+          }
+        ]
+      }
+    },
+    {
+      "id": "magic_saradomin_strike_charged_greater_demon",
+      "description": "Charged god spell, charge upkeep cost and magic-defence roll against a demon.",
+      "input": {
+        "combatType": "magic",
+        "monsterId": "greater_demon",
+        "weapon": "staff_of_air",
+        "ammo": null,
+        "spell": "saradomin_strike",
+        "style": "accurate",
+        "levels": {
+          "attack": 40,
+          "strength": 40,
+          "defence": 60,
+          "ranged": 50,
+          "magic": 80,
+          "prayer": 52
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "magic"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "none",
+          "teleport": true,
+          "bankSeconds": 130,
+          "runeSlots": 3
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "magic",
+        "maxHit": 30,
+        "peakMaxHit": 30,
+        "hitChance": 0.976502,
+        "avgHit": 14.647533,
+        "dps": 4.882511,
+        "effDps": 4.882511,
+        "ttkSec": 19.354795,
+        "cycleSec": 22.854795,
+        "killsPerHour": 157.516181,
+        "effectiveKph": 152.7644,
+        "xpPerHour": 60153.040494,
+        "effectiveXpPerHour": 58338.40747,
+        "totalXpPerHour": 76014.776177,
+        "gpPerKill": 603.570937,
+        "gpPerHour": 95072.188814,
+        "netGpPerHour": -1530251.576355,
+        "effectiveNetGpPerHour": -1484088.572405,
+        "supplyCostPerKill": 10318.45591,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 24.60825,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 10293.84766,
+        "castsPerKill": 6.451598,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 182.865502,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.969833,
+          "effectiveKph": 152.7644,
+          "bankSeconds": 130,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 4,
+            "stackReserve": 4,
+            "foodCount": 0,
+            "lootCapacity": 20,
+            "nonStackPerKill": 0.10937
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Rune full helm",
+            "key": "rune_full_helm",
+            "pref": "loot",
+            "evGp": 237.424,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 21120
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 106.102637,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Fire rune ×75",
+            "key": "firerune",
+            "pref": "loot",
+            "evGp": 65.625,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Chaos rune ×15",
+            "key": "chaosrune",
+            "pref": "loot",
+            "evGp": 46.7628,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coins",
+            "key": "coins",
+            "pref": "loot",
+            "evGp": 41.25,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "mag",
+            "name": "Magic",
+            "xpPerHour": 58338.40747
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 17676.368706
+          }
+        ]
+      }
+    },
+    {
+      "id": "magic_water_bolt_tribesman_poison_safespot",
+      "description": "Magic safespot against poisonous monster; baseline keeps auto-safespot incoming poison at zero.",
+      "input": {
+        "combatType": "magic",
+        "monsterId": "tribesman",
+        "weapon": "staff_of_water",
+        "ammo": null,
+        "spell": "water_bolt",
+        "style": "defensive",
+        "levels": {
+          "attack": 30,
+          "strength": 30,
+          "defence": 45,
+          "ranged": 30,
+          "magic": 55,
+          "prayer": 37
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "magic"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "salmon",
+          "teleport": true,
+          "bankSeconds": 240,
+          "runeSlots": 2,
+          "antipoison": true
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "magic",
+        "maxHit": 10,
+        "peakMaxHit": 10,
+        "hitChance": 0.961935,
+        "avgHit": 4.809676,
+        "dps": 1.603225,
+        "effDps": 1.603225,
+        "ttkSec": 25.885318,
+        "cycleSec": 28.385318,
+        "killsPerHour": 126.826129,
+        "effectiveKph": 110.399054,
+        "xpPerHour": 28509.599121,
+        "effectiveXpPerHour": 24816.911103,
+        "totalXpPerHour": 31040.105755,
+        "gpPerKill": 689.863058,
+        "gpPerHour": 87492.661022,
+        "netGpPerHour": -133753.284027,
+        "effectiveNetGpPerHour": -116428.97346,
+        "supplyCostPerKill": 1744.482366,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 79.193571,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 1665.288794,
+        "castsPerKill": 8.628439,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 56.822794,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 0.870476,
+          "effectiveKph": 110.399054,
+          "bankSeconds": 240,
+          "incoming": {
+            "safespot": true,
+            "safespotAuto": true,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 3,
+            "stackReserve": 4,
+            "foodCount": 0,
+            "lootCapacity": 21,
+            "nonStackPerKill": 0.36957
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Limpwurt root",
+            "key": "limpwurt_root",
+            "pref": "loot",
+            "evGp": 217.4,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Snape grass",
+            "key": "snape_grass",
+            "pref": "loot",
+            "evGp": 165.36513,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 158.921813,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Nature rune ×3",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 61.04241,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Gold ore",
+            "key": "gold_ore",
+            "pref": "loot",
+            "evGp": 39.853,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "def",
+            "name": "Defence",
+            "xpPerHour": 4305.563091
+          },
+          {
+            "key": "mag",
+            "name": "Magic",
+            "xpPerHour": 20511.348013
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 5726.39891
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 496.795741
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_chaos_dwarf_alch_rune_drop",
+      "description": "Melee plus in-trip alching for rune/metal drops and nature-rune cost accounting.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "chaos_dwarf",
+        "weapon": "rune_scimitar",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 70,
+          "strength": 72,
+          "defence": 60,
+          "ranged": 50,
+          "magic": 55,
+          "prayer": 43
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str"
+        ],
+        "sustained": true,
+        "repotThreshold": 74,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 120,
+          "alching": true,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 19,
+        "peakMaxHit": 20,
+        "hitChance": 0.841346,
+        "avgHit": 7.994749,
+        "dps": 3.331145,
+        "effDps": 3.331145,
+        "ttkSec": 19.737955,
+        "cycleSec": 22.284815,
+        "killsPerHour": 161.544978,
+        "effectiveKph": 155.431418,
+        "xpPerHour": 39416.974737,
+        "effectiveXpPerHour": 37925.265922,
+        "totalXpPerHour": 51392.667739,
+        "gpPerKill": 459.668357,
+        "gpPerHour": 74257.114881,
+        "netGpPerHour": 60782.860283,
+        "effectiveNetGpPerHour": 58482.573944,
+        "supplyCostPerKill": 83.408687,
+        "foodCostPerKill": 37.632153,
+        "potionCostPerKill": 45.776534,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 14.3773,
+        "ammo": null,
+        "trip": {
+          "bound": "food",
+          "killsPerTrip": 136.904205,
+          "foodPerKill": 0.168001,
+          "lootFraction": 1,
+          "efficiency": 0.962156,
+          "effectiveKph": 155.431418,
+          "bankSeconds": 120,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 2.387422,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 3,
+            "stackReserve": 8,
+            "foodCount": 23,
+            "lootCapacity": 17,
+            "nonStackPerKill": 0.09375
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 106.102637,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Mithril bar",
+            "key": "mithril_bar",
+            "pref": "loot",
+            "evGp": 102.1984,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 180
+          },
+          {
+            "name": "Nature rune ×9",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 74.04696,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Chaos rune ×10",
+            "key": "chaosrune",
+            "pref": "loot",
+            "evGp": 31.1752,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Law rune ×3",
+            "key": "lawrune",
+            "pref": "loot",
+            "evGp": 28.96875,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 37925.265922
+          },
+          {
+            "key": "alch",
+            "name": "Magic (alch)",
+            "xpPerHour": 157.809518
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 12610.150919
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 699.44138
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_black_dragon_food_limited_trip",
+      "description": "High incoming-damage dragon trip with anti-dragon shield and antifire potion.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "black_dragon",
+        "weapon": "dragon_longsword",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 85,
+          "strength": 85,
+          "defence": 80,
+          "ranged": 60,
+          "magic": 60,
+          "prayer": 60
+        },
+        "prayers": [
+          "ultimate",
+          "incredible",
+          "steel_skin"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str",
+          "super_def"
+        ],
+        "sustained": true,
+        "repotThreshold": 88,
+        "trip": {
+          "foodKey": "shark",
+          "teleport": true,
+          "bankSeconds": 300,
+          "antifire": true,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 26.857143,
+        "peakMaxHit": 29,
+        "hitChance": 0.299423,
+        "avgHit": 4.027252,
+        "dps": 1.342417,
+        "effDps": 1.342417,
+        "ttkSec": 146.537351,
+        "cycleSec": 150.037351,
+        "killsPerHour": 23.994025,
+        "effectiveKph": 13.867916,
+        "xpPerHour": 18235.459239,
+        "effectiveXpPerHour": 10539.616232,
+        "totalXpPerHour": 14044.038629,
+        "gpPerKill": 7855.112432,
+        "gpPerHour": 188475.766538,
+        "netGpPerHour": -75458.909596,
+        "effectiveNetGpPerHour": -43613.266768,
+        "supplyCostPerKill": 11000.016574,
+        "foodCostPerKill": 6593.363629,
+        "potionCostPerKill": 4406.652945,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 0,
+        "prayerPerKill": 136.397592,
+        "ammo": null,
+        "trip": {
+          "bound": "food",
+          "killsPerTrip": 2.73836,
+          "foodPerKill": 8.399189,
+          "lootFraction": 1,
+          "efficiency": 0.577974,
+          "effectiveKph": 13.867916,
+          "bankSeconds": 300,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 170.484409,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 6,
+            "foodCount": 23,
+            "lootCapacity": 21,
+            "nonStackPerKill": 2.16407
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Black dragonhide",
+            "key": "dragonhide_black",
+            "pref": "loot",
+            "evGp": 3640,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Dragon bones",
+            "key": "dragon_bones",
+            "pref": "loot",
+            "evGp": 2504,
+            "prayerXp": 72,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Ultra-rare drop table",
+            "key": null,
+            "pref": "loot",
+            "evGp": 627.287784,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Blood rune ×15",
+            "key": "bloodrune",
+            "pref": "loot",
+            "evGp": 272.49,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Rune longsword",
+            "key": "rune_longsword",
+            "pref": "loot",
+            "evGp": 146.66399,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 19200
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 10539.616232
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 3504.422397
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_elf_warrior_90_ranged_attacker",
+      "description": "The only monster that shoots rather than swings: accuracy and max hit come off its ranged level, while its shot is checked against stab defence.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "elf_warrior_90",
+        "weapon": "dragon_longsword",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 80,
+          "strength": 80,
+          "defence": 75,
+          "ranged": 60,
+          "magic": 60,
+          "prayer": 50
+        },
+        "prayers": [
+          "ultimate",
+          "incredible"
+        ],
+        "boosts": [
+          "super_att",
+          "super_str"
+        ],
+        "sustained": true,
+        "repotThreshold": 82,
+        "trip": {
+          "foodKey": "shark",
+          "teleport": true,
+          "bankSeconds": 180,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 25.466667,
+        "peakMaxHit": 27,
+        "hitChance": 0.931573,
+        "avgHit": 11.863753,
+        "dps": 3.954584,
+        "effDps": 3.954584,
+        "ttkSec": 28.161408,
+        "cycleSec": 31.661408,
+        "killsPerHour": 113.703092,
+        "effectiveKph": 106.06746,
+        "xpPerHour": 47755.298457,
+        "effectiveXpPerHour": 44548.3331,
+        "totalXpPerHour": 59837.957425,
+        "gpPerKill": 893.65184,
+        "gpPerHour": 101610.97698,
+        "netGpPerHour": 64332.479107,
+        "effectiveNetGpPerHour": 60012.287662,
+        "supplyCostPerKill": 327.858261,
+        "foodCostPerKill": 248.502177,
+        "potionCostPerKill": 79.356084,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 19.188732,
+        "ammo": null,
+        "trip": {
+          "bound": "food",
+          "killsPerTrip": 78.973151,
+          "foodPerKill": 0.316563,
+          "lootFraction": 1,
+          "efficiency": 0.932846,
+          "effectiveKph": 106.06746,
+          "bankSeconds": 180,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 6.858956,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 5,
+            "foodCount": 25,
+            "lootCapacity": 22,
+            "nonStackPerKill": 0.25781
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 233.647562,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Nature rune ×12",
+            "key": "naturerune",
+            "pref": "loot",
+            "evGp": 164.52072,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Green d'hide body",
+            "key": "dragonhide_body",
+            "pref": "loot",
+            "evGp": 146.25,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 4680
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 106.102637,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Water rune ×70",
+            "key": "waterrune",
+            "pref": "loot",
+            "evGp": 74.375,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 44548.3331
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 14812.320756
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 477.303569
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_bandit_stab_damagetype",
+      "description": "A stab-damagetype monster taking live hits, so the player stab defence path is covered rather than inferred.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "bandit",
+        "weapon": "rune_scimitar",
+        "ammo": null,
+        "spell": null,
+        "style": "aggressive",
+        "levels": {
+          "attack": 55,
+          "strength": 55,
+          "defence": 45,
+          "ranged": 40,
+          "magic": 40,
+          "prayer": 31
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "none"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "lobster",
+          "teleport": true,
+          "bankSeconds": 100,
+          "prayerMode": "none"
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 12,
+        "peakMaxHit": 12,
+        "hitChance": 0.879658,
+        "avgHit": 5.277946,
+        "dps": 2.199144,
+        "effDps": 2.199144,
+        "ttkSec": 13.641669,
+        "cycleSec": 16.141669,
+        "killsPerHour": 223.025261,
+        "effectiveKph": 196.256937,
+        "xpPerHour": 24086.728158,
+        "effectiveXpPerHour": 21195.749159,
+        "totalXpPerHour": 29126.491969,
+        "gpPerKill": 752.824953,
+        "gpPerHour": 167898.981432,
+        "netGpPerHour": 166762.495865,
+        "effectiveNetGpPerHour": 146747.038794,
+        "supplyCostPerKill": 5.095771,
+        "foodCostPerKill": 5.095771,
+        "potionCostPerKill": 0,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "loot",
+          "killsPerTrip": 45.420864,
+          "foodPerKill": 0.022749,
+          "lootFraction": 1,
+          "efficiency": 0.879976,
+          "effectiveKph": 196.256937,
+          "bankSeconds": 100,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 0.542016,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 1,
+            "stackReserve": 9,
+            "foodCount": 2,
+            "lootCapacity": 18,
+            "nonStackPerKill": 0.37501
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Random herb",
+            "key": null,
+            "pref": "loot",
+            "evGp": 576.313375,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Random jewel (gem table)",
+            "key": null,
+            "pref": "loot",
+            "evGp": 63.672448,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Coal",
+            "key": "coal",
+            "pref": "loot",
+            "evGp": 24.8464,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Chaos rune ×6",
+            "key": "chaosrune",
+            "pref": "loot",
+            "evGp": 18.70512,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Law rune ×3",
+            "key": "lawrune",
+            "pref": "loot",
+            "evGp": 14.48901,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "str",
+            "name": "Strength",
+            "xpPerHour": 21195.749159
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 7047.586595
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 883.156215
+          }
+        ]
+      }
+    },
+    {
+      "id": "melee_low_level_chicken_low_value_loot",
+      "description": "Low-level melee case with near-worthless drops and no supply stack.",
+      "input": {
+        "combatType": "melee",
+        "monsterId": "chicken",
+        "weapon": "iron_scimitar",
+        "ammo": null,
+        "spell": null,
+        "style": "accurate",
+        "levels": {
+          "attack": 10,
+          "strength": 10,
+          "defence": 10,
+          "ranged": 1,
+          "magic": 1,
+          "prayer": 1
+        },
+        "prayers": [
+          "none"
+        ],
+        "boosts": [
+          "none"
+        ],
+        "sustained": false,
+        "repotThreshold": null,
+        "trip": {
+          "foodKey": "none",
+          "teleport": false,
+          "bankSeconds": 0
+        },
+        "ringOfWealth": false,
+        "specWeapon": "none",
+        "cannon": null,
+        "lootPrefs": null
+      },
+      "expected": {
+        "combatType": "melee",
+        "maxHit": 2,
+        "peakMaxHit": 2,
+        "hitChance": 0.928617,
+        "avgHit": 0.928617,
+        "dps": 0.386924,
+        "effDps": 0.386924,
+        "ttkSec": 9.045706,
+        "cycleSec": 12.545706,
+        "killsPerHour": 286.950762,
+        "effectiveKph": 286.950762,
+        "xpPerHour": 3443.409141,
+        "effectiveXpPerHour": 3443.409141,
+        "totalXpPerHour": 5879.621108,
+        "gpPerKill": 90,
+        "gpPerHour": 25825.568558,
+        "netGpPerHour": 25825.568558,
+        "effectiveNetGpPerHour": 25825.568558,
+        "supplyCostPerKill": 0,
+        "foodCostPerKill": 0,
+        "potionCostPerKill": 0,
+        "ammoCostPerKill": 0,
+        "runeCostPerKill": 0,
+        "castsPerKill": 0,
+        "prayerXpPerKill": 4.5,
+        "prayerPerKill": 0,
+        "ammo": null,
+        "trip": {
+          "bound": "none",
+          "killsPerTrip": null,
+          "foodPerKill": 0,
+          "lootFraction": 1,
+          "efficiency": 1,
+          "effectiveKph": 286.950762,
+          "bankSeconds": 0,
+          "incoming": {
+            "safespot": false,
+            "safespotAuto": false,
+            "hpPerKill": 0,
+            "dragonfire": 0,
+            "poison": 0
+          },
+          "slots": {
+            "reserve": 0,
+            "stackReserve": 1,
+            "foodCount": 0,
+            "lootCapacity": 27,
+            "nonStackPerKill": 0
+          }
+        },
+        "cannon": null,
+        "scarce": null,
+        "spec": null,
+        "poison": null,
+        "recoil": null,
+        "topLoot": [
+          {
+            "name": "Feathers ×15",
+            "key": "feather",
+            "pref": "loot",
+            "evGp": 67.5,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Feathers ×5",
+            "key": "feather",
+            "pref": "loot",
+            "evGp": 22.5,
+            "prayerXp": 0,
+            "slotFrac": 1,
+            "alchValue": 0
+          },
+          {
+            "name": "Bones",
+            "key": "bones",
+            "pref": "bury",
+            "evGp": 0,
+            "prayerXp": 4.5,
+            "slotFrac": 1,
+            "alchValue": 0
+          }
+        ],
+        "skillXpBreakdown": [
+          {
+            "key": "att",
+            "name": "Attack",
+            "xpPerHour": 3443.409141
+          },
+          {
+            "key": "hp",
+            "name": "Hitpoints",
+            "xpPerHour": 1144.933539
+          },
+          {
+            "key": "prayer",
+            "name": "Prayer",
+            "xpPerHour": 1291.278428
+          }
+        ]
+      }
+    }
+  ]
+}
